@@ -1,7 +1,3 @@
-flags: {}
-extra-package-dbs: []
-packages:
-- location: '.'
-resolver: nightly-2018-04-19
-ghc-options:
-  "$locals": -W -Werror
+resolver: lts-6.35
+extra-deps:
+- codec-beam-0.1.1
