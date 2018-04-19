@@ -1,0 +1,30 @@
+Name: pine
+Category: Language
+Version: 0.1.1
+Maintainer: h.kofigumbs@gmail.com
+Synopsis: Elm, for the Erlang VM
+Description: Elm, for the Erlang VM.
+
+Extra-Source-Files:
+  README.md
+
+License: BSD3
+License-File: LICENSE
+
+Cabal-Version: >=1.9
+Build-Type: Simple
+
+Bug-Reports: https://github.com/hkgumbs/pine-lang/issues
+Homepage: https://github.com/hkgumbs/pine-lang#readme
+Source-Repository head
+    type:     git
+    location: git://github.com/hkgumbs/pine-lang.git
+
+Executable pine
+    extensions: OverloadedStrings
+    main-is: Main.hs
+    hs-source-dirs: src
+    build-depends: base >=4.8 && <5,
+                   bytestring >=0.10.6,
+                   codec-beam >=0.1.1,
+                   text >=1.2.2

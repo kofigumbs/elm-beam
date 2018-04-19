@@ -1,0 +1,7 @@
+flags: {}
+extra-package-dbs: []
+packages:
+- location: '.'
+resolver: nightly-2018-04-19
+ghc-options:
+  "$locals": -W -Werror
