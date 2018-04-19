@@ -10,7 +10,7 @@ module Pine.Compiler
 
 import qualified Data.Aeson as Json
 import qualified Data.Map as Map
-import qualified Data.Text.Lazy as LazyText
+import qualified Data.ByteString.Lazy as LazyText
 import System.IO (Handle)
 
 import qualified AST.Module as Module
@@ -126,7 +126,7 @@ data Context = Context
 data Result = Result
     { _docs :: Maybe Docs.Documentation
     , _interface :: PublicModule.Interface
-    , _js :: LazyText.Text
+    , _js :: LazyText.ByteString
     }
 
 
