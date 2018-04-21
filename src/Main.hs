@@ -1,24 +1,33 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import qualified Data.ByteString.Lazy as LazyText
-import qualified Data.Map as Map
 import qualified System.Environment as Env
 
-import qualified AST.Module as Module
 import qualified Elm.Package as Package
-import qualified Pine.Compiler as Pine
+import qualified Pine.Compiler as Compiler
+import qualified Pine.Core as Core
 
 
 main :: IO ()
 main =
-  do path <- head <$> Env.getArgs
+  do path <- getFile
      source <- readFile path
 
-     let (dealiaser, _, result) =
-           Pine.compile (Pine.Context Package.core False []) source mempty
+     let context =
+           Compiler.Context Package.core False Core.modules
+         (dealiaser, _, result) =
+           Compiler.compile context source Core.interfaces
 
      case result of
-       Right (Pine.Result _ _ output) ->
+       Right (Compiler.Result _ _ output) ->
          LazyText.writeFile "pine.beam" output
        Left errors ->
-         error $ concatMap (Pine.errorToString dealiaser path source) errors
+         error $ concatMap (Compiler.errorToString dealiaser path source) errors
+
+
+getFile :: IO String
+getFile =
+  do  args <- Env.getArgs
+      case args of
+        [file] -> return file
+        _      -> error "USAGE: pine FILE"
