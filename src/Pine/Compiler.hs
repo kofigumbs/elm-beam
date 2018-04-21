@@ -22,6 +22,7 @@ import qualified Elm.Compiler.Module as PublicModule
 import qualified Elm.Compiler.Version
 import qualified Elm.Docs as Docs
 import qualified Elm.Package as Package
+import qualified Generate.Beam
 import qualified Parse.Module as Parse
 import qualified Parse.Parse as Parse
 import qualified Reporting.Annotation as A
@@ -106,9 +107,9 @@ compile context source interfaces =
           docs <- Result.format Error.Docs (docsGen isExposed modul)
 
           let interface = Module.toInterface packageName modul
-          let javascript = {- TODO -} LazyBytes.empty
+          let beam = Generate.Beam.generate modul
 
-          return (Result docs interface javascript)
+          return (Result docs interface beam)
   in
     ( Result.oneToValue dummyLocalizer Localizer oneLocalizer
     , Bag.toList Warning warnings
@@ -126,7 +127,7 @@ data Context = Context
 data Result = Result
     { _docs :: Maybe Docs.Documentation
     , _interface :: PublicModule.Interface
-    , _js :: LazyBytes.ByteString
+    , _beam :: LazyBytes.ByteString
     }
 
 
