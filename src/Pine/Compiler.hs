@@ -10,7 +10,7 @@ module Pine.Compiler
 
 import qualified Data.Aeson as Json
 import qualified Data.Map as Map
-import qualified Data.ByteString.Lazy as LazyText
+import qualified Data.ByteString.Lazy as LazyBytes
 import System.IO (Handle)
 
 import qualified AST.Module as Module
@@ -106,7 +106,7 @@ compile context source interfaces =
           docs <- Result.format Error.Docs (docsGen isExposed modul)
 
           let interface = Module.toInterface packageName modul
-          let javascript = {- TODO -} LazyText.empty
+          let javascript = {- TODO -} LazyBytes.empty
 
           return (Result docs interface javascript)
   in
@@ -126,7 +126,7 @@ data Context = Context
 data Result = Result
     { _docs :: Maybe Docs.Documentation
     , _interface :: PublicModule.Interface
-    , _js :: LazyText.ByteString
+    , _js :: LazyBytes.ByteString
     }
 
 
