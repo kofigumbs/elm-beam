@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 import qualified Data.ByteString.Lazy as LazyBytes
 import qualified System.Environment as Env
 

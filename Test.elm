@@ -2,12 +2,13 @@ import Platform
 
 main : Platform.Program () () ()
 main =
-    Platform.server
-        { init = init
-        , terminate = terminate
-        , handleCall = handleCall
-        , handleCast = handleCast
-        }
+    Platform.server 123
+--    Platform.server
+--        { init = init
+--        , terminate = terminate
+--        , handleCall = handleCall
+--        , handleCast = handleCast
+--        }
 
 init = 1
 terminate = 2
