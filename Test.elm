@@ -2,7 +2,7 @@ import Platform
 
 main : Platform.Program () () ()
 main =
-    Platform.server 123
+    Platform.server init
 --    Platform.server
 --        { init = init
 --        , terminate = terminate
@@ -13,4 +13,4 @@ main =
 init = 1
 terminate = 2
 handleCall = 3
-handleCast = 2
+handleCast = 4
