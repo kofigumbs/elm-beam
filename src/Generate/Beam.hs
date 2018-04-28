@@ -22,44 +22,57 @@ generate (Module.Module moduleName _ info) =
       Module.program info
 
     env =
-      Env 1 Map.empty
+      Env 1 0 Map.empty
   in
   Beam.encode "pine" [ Beam.export "main" 0, Beam.insertModuleInfo ] $
     State.evalState (concat <$> mapM (fromDef moduleName) defs) env
 
 
-type Gen a = State.State Env a
+type Gen a =
+  State.State Env a
 
 data Env = Env
   { _nextLabel :: Int
-  , _variables :: Map.Map Var.Canonical Beam.Label
+  , _nextStackAllocation :: Int
+  , _functions :: Map.Map Var.Canonical Beam.Label
   }
 
-data Value = Value [Beam.Op] Beam.Source
+data Value = Value
+  { _ops :: [Beam.Op]
+  , _result :: Beam.Source
+  }
 
 fromDef :: ModuleName.Canonical -> Opt.Def -> Gen [Beam.Op]
 fromDef moduleName def =
-  case def of
-    Opt.Def _facts _name (Opt.Function _args _body) ->
-      undefined
+  do  pre <- freshLabel
+      post <- freshLabel
+      resetStackAllocation
+      saveTopLevel moduleName name post
+      Value ops result <- fromExpr body
+      stackNeeded <- getStackAllocations
+      return $ concat
+        [ [ I.label pre
+          , I.func_info (Text.pack name) (length args)
+          , I.label post
+          , I.allocate stackNeeded (length args)
+          ]
+        , ops
+        , [ I.move result returnRegister
+          , I.deallocate stackNeeded
+          , I.return'
+          ]
+        ]
+  where
+    ( name, args, body ) =
+      case def of
+        Opt.Def _ _name (Opt.Function _ _expr) ->
+          undefined
 
-    Opt.Def _facts name expr ->
-      do  pre <- freshLabel
-          post <- freshLabel
-          saveTopLevel moduleName name post
-          Value body result <- fromExpr expr
-          return $ concat
-            [ [ I.label pre
-              , I.func_info (Text.pack name) 0
-              , I.label post
-              , I.allocate 0 0
-              ]
-            , body
-            , [ I.move result returnRegister, I.deallocate 0, I.return' ]
-            ]
+        Opt.Def _ name expr ->
+          ( name, [], expr )
 
-    Opt.TailDef _facts _name _labels _expr ->
-      undefined
+        Opt.TailDef _facts _name _labels _expr ->
+          undefined
 
 
 fromExpr :: Opt.Expr -> Gen Value
@@ -69,12 +82,26 @@ fromExpr expr =
       return $ Value [] (Beam.toSource number)
 
     Opt.Var variable ->
-      do  reference <- Map.lookup variable <$> State.gets _variables
+      do  reference <- Map.lookup variable <$> State.gets _functions
+          tmp <- freshStackAllocation
           case reference of
             Nothing ->
               error $ "VARIABLE `" ++ Var.name variable ++ "` is unbound"
             Just label ->
-              return $ Value [ I.call 0 label ] (Beam.toSource returnRegister)
+              return $ Value
+                [ I.call 0 label
+                , I.move returnRegister tmp
+                ]
+                (Beam.toSource tmp)
+
+    Opt.Record fields ->
+      do  tmp <- freshStackAllocation
+          values <- mapM (fromExpr . snd) fields
+          let ops = concatMap _ops values ++
+                [ I.put_map_assoc cannotFail (Beam.Map []) tmp $
+                    zipWith (toMapPair . fst) fields values
+                ]
+          return $ Value ops (Beam.toSource tmp)
 
     Opt.Program _ (Opt.Call (Opt.Var program) [ argument ]) | program == server ->
       {- TODO: This guard probably needs to move up to `fromDef`,
@@ -85,6 +112,11 @@ fromExpr expr =
       undefined
 
 
+toMapPair :: String -> Value -> ( Beam.Source, Beam.Source )
+toMapPair key (Value _ value) =
+  ( Beam.toSource $ Beam.Atom (Text.pack key), value )
+
+
 server :: Var.Canonical
 server =
   Var.inCore ["Platform"] "server"
@@ -93,8 +125,8 @@ server =
 saveTopLevel :: ModuleName.Canonical -> String -> Beam.Label -> Gen ()
 saveTopLevel moduleName name label =
   State.modify $ \env -> env
-    { _variables =
-        Map.insert (Var.topLevel moduleName name) label (_variables env)
+    { _functions =
+        Map.insert (Var.topLevel moduleName name) label (_functions env)
     }
 
 
@@ -105,6 +137,28 @@ freshLabel =
       return $ Beam.Label i
 
 
+freshStackAllocation :: Gen Beam.Y
+freshStackAllocation =
+  do  i <- State.gets _nextStackAllocation
+      State.modify $ \env -> env { _nextStackAllocation = i + 1 }
+      return $ Beam.Y i
+
+
+resetStackAllocation :: Gen ()
+resetStackAllocation =
+  State.modify $ \env -> env { _nextStackAllocation = 0 }
+
+
+getStackAllocations :: Gen Int
+getStackAllocations =
+  State.gets _nextStackAllocation
+
+
 returnRegister :: Beam.X
 returnRegister =
   Beam.X 0
+
+
+cannotFail :: Beam.Label
+cannotFail =
+  Beam.Label 0
