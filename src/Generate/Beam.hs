@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Generate.Beam (generate) where
 
+import Codec.Beam.Bifs (Erlang'splus_2(..))
 import qualified Codec.Beam as Beam
 import qualified Codec.Beam.Instructions as I
 import qualified Control.Monad.State as State
@@ -24,8 +25,15 @@ generate (Module.Module moduleName _ info) =
     env =
       Env 1 0 Map.empty
   in
-  Beam.encode "pine" [ Beam.export "main" 0, Beam.insertModuleInfo ] $
-    State.evalState (concat <$> mapM (fromDef moduleName) defs) env
+  Beam.encode "pine"
+    [ Beam.insertModuleInfo
+    , Beam.export "init" 1
+    , Beam.export "handle_call" 3
+    , Beam.export "handle_cast" 2
+    , Beam.export "handle_info" 2
+    , Beam.export "terminate" 2
+    , Beam.export "code_change" 3
+    ] $ State.evalState (concat <$> mapM (fromDef moduleName) defs) env
 
 
 type Gen a =
@@ -34,7 +42,7 @@ type Gen a =
 data Env = Env
   { _nextLabel :: Int
   , _nextStackAllocation :: Int
-  , _functions :: Map.Map Var.Canonical Beam.Label
+  , _references :: Map.Map Var.Canonical (Either Beam.Label Beam.X)
   }
 
 data Value = Value
@@ -42,13 +50,39 @@ data Value = Value
   , _result :: Beam.Source
   }
 
+
 fromDef :: ModuleName.Canonical -> Opt.Def -> Gen [Beam.Op]
 fromDef moduleName def =
+  case def of
+    Opt.Def _ "main" (Opt.Program _ (Opt.Call _ [ Opt.Record fields ])) ->
+      let
+        Just init = lookup "init" fields
+        Just (Opt.Function _ handleCall) = lookup "handleCall" fields
+      in
+      (++)
+        <$> makeFunction moduleName "init" [ "_" ]
+              (Opt.Data "ok" [ init ])
+        <*> do  saveLocal "state" (Beam.X 2)
+                makeFunction moduleName "handle_call" [ "_", "_", "state" ]
+                  (Opt.Data "reply" [ handleCall, handleCall ])
+
+    Opt.Def _ name (Opt.Function args expr) ->
+      makeFunction moduleName name args expr
+
+    Opt.Def _ name expr ->
+      makeFunction moduleName name [] expr
+
+    Opt.TailDef _facts _name _labels _expr ->
+      undefined
+
+
+makeFunction :: ModuleName.Canonical -> String -> [String] -> Opt.Expr -> Gen [Beam.Op]
+makeFunction moduleName name args body =
   do  pre <- freshLabel
       post <- freshLabel
       resetStackAllocation
       saveTopLevel moduleName name post
-      Value ops result <- fromExpr body
+      Value bodyOps result <- fromExpr body
       stackNeeded <- getStackAllocations
       return $ concat
         [ [ I.label pre
@@ -56,23 +90,12 @@ fromDef moduleName def =
           , I.label post
           , I.allocate stackNeeded (length args)
           ]
-        , ops
+        , bodyOps
         , [ I.move result returnRegister
           , I.deallocate stackNeeded
           , I.return'
           ]
         ]
-  where
-    ( name, args, body ) =
-      case def of
-        Opt.Def _ _name (Opt.Function _ _expr) ->
-          undefined
-
-        Opt.Def _ name expr ->
-          ( name, [], expr )
-
-        Opt.TailDef _facts _name _labels _expr ->
-          undefined
 
 
 fromExpr :: Opt.Expr -> Gen Value
@@ -81,18 +104,41 @@ fromExpr expr =
     Opt.Literal (Literal.IntNum number) ->
       return $ Value [] (Beam.toSource number)
 
+    Opt.Binop (Var.Canonical _ "+") left right ->
+      do  tmp <- freshStackAllocation
+          Value leftOps leftResult <- fromExpr left
+          Value rightOps rightResult <- fromExpr right
+          let ops =
+                leftOps ++ rightOps ++
+                  [ I.bif2 cannotFail Erlang'splus_2 leftResult rightResult tmp
+                  ]
+          return $ Value ops (Beam.toSource tmp)
+
     Opt.Var variable ->
-      do  reference <- Map.lookup variable <$> State.gets _functions
+      do  reference <- Map.lookup variable <$> State.gets _references
           tmp <- freshStackAllocation
           case reference of
             Nothing ->
               error $ "VARIABLE `" ++ Var.name variable ++ "` is unbound"
-            Just label ->
+
+            Just (Right register) ->
+              return $ Value [] (Beam.toSource register)
+
+            Just (Left label) ->
               return $ Value
                 [ I.call 0 label
                 , I.move returnRegister tmp
                 ]
                 (Beam.toSource tmp)
+
+    Opt.Data constructor args ->
+      do  tmp <- freshStackAllocation
+          values <- mapM fromExpr args
+          let ops = concatMap _ops values ++
+                I.put_tuple (length args + 1) tmp
+                  : I.put (Beam.Atom (Text.pack constructor))
+                  : map (I.put . _result) values
+          return $ Value ops (Beam.toSource tmp)
 
     Opt.Record fields ->
       do  tmp <- freshStackAllocation
@@ -103,11 +149,6 @@ fromExpr expr =
                 ]
           return $ Value ops (Beam.toSource tmp)
 
-    Opt.Program _ (Opt.Call (Opt.Var program) [ argument ]) | program == server ->
-      {- TODO: This guard probably needs to move up to `fromDef`,
-               so that we can generate the gen_server code -}
-      fromExpr argument
-
     _ ->
       undefined
 
@@ -117,16 +158,19 @@ toMapPair key (Value _ value) =
   ( Beam.toSource $ Beam.Atom (Text.pack key), value )
 
 
-server :: Var.Canonical
-server =
-  Var.inCore ["Platform"] "server"
-
-
 saveTopLevel :: ModuleName.Canonical -> String -> Beam.Label -> Gen ()
 saveTopLevel moduleName name label =
   State.modify $ \env -> env
-    { _functions =
-        Map.insert (Var.topLevel moduleName name) label (_functions env)
+    { _references =
+        Map.insert (Var.topLevel moduleName name) (Left label) (_references env)
+    }
+
+
+saveLocal :: String -> Beam.X -> Gen ()
+saveLocal name register =
+  State.modify $ \env -> env
+    { _references =
+        Map.insert (Var.local name) (Right register) (_references env)
     }
 
 

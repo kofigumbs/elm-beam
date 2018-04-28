@@ -34,18 +34,25 @@ imports :: [Variable.Value]
 imports =
   [ Variable.Union "Program" Variable.closedListing
   , Variable.Value "server"
+  , Variable.Value "+"
   ]
 
 
 types :: Module.Types
 types =
-  Map.singleton "server" $
-    Type.Lambda (Type.Var "a") $
-       Type.App
-         (Type.Type (Variable.inCore ["Platform"] "Program"))
-         [Type.Var "flags", Type.Var "model", Type.Var "msg"]
+  Map.fromList
+    [ ( "server"
+      , Type.Lambda (Type.Var "a") $
+          Type.App
+            (Type.Type (Variable.inCore ["Platform"] "Program"))
+            [ Type.Var "flags", Type.Var "model", Type.Var "msg" ]
+      )
+    , ( "+"
+      , Type.Lambda (Type.Var "a") $ Type.Lambda (Type.Var "a") (Type.Var "a")
+      )
+    ]
 
 
 unions :: Module.Unions
 unions =
-  Map.singleton "Program" (["flags", "model", "msg" ], [])
+  Map.singleton "Program" ([ "flags", "model", "msg" ], [])
