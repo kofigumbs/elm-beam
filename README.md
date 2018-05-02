@@ -1,3 +1,5 @@
+### Runing compiled `Test.elm`
+
 ```
 1> l(pine).
 {module,pine}
@@ -7,4 +9,10 @@
 2
 4> gen_server:call(pine, {}).
 3
+```
+
+### Debugging generated code
+
+```
+1> beam_disasm:file(pine).
 ```

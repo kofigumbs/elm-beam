@@ -57,13 +57,13 @@ fromDef moduleName def =
     Opt.Def _ "main" (Opt.Program _ (Opt.Call _ [ Opt.Record fields ])) ->
       let
         Just init = lookup "init" fields
-        Just (Opt.Function _ handleCall) = lookup "handleCall" fields
+        Just (Opt.Function [ arg ] handleCall) = lookup "handleCall" fields
       in
       (++)
         <$> makeFunction moduleName "init" [ "_" ]
               (Opt.Data "ok" [ init ])
-        <*> do  saveLocal "state" (Beam.X 2)
-                makeFunction moduleName "handle_call" [ "_", "_", "state" ]
+        <*> do  saveLocal arg (Beam.X 2)
+                makeFunction moduleName "handle_call" [ "_", "_", arg ]
                   (Opt.Data "reply" [ handleCall, handleCall ])
 
     Opt.Def _ name (Opt.Function args expr) ->
@@ -135,7 +135,8 @@ fromExpr expr =
       do  tmp <- freshStackAllocation
           values <- mapM fromExpr args
           let ops = concatMap _ops values ++
-                I.put_tuple (length args + 1) tmp
+                I.test_heap (length args + 2) 0
+                  : I.put_tuple (length args + 1) tmp
                   : I.put (Beam.Atom (Text.pack constructor))
                   : map (I.put . _result) values
           return $ Value ops (Beam.toSource tmp)
