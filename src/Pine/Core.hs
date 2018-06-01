@@ -36,12 +36,33 @@ interfaces =
       )
     , ( ModuleName.inCore ["Basics"]
       , defaultCoreInterface
-          { Module.iExports = [ Variable.Value "+" ]
-          , Module.iTypes   = 
-              Map.singleton "+" $ Type.Lambda a $ Type.Lambda a a
+          { Module.iExports = Variable.Value . fst <$> basicOps
+          , Module.iTypes   = Map.fromList basicOps
+          , Module.iUnions  =
+              Map.fromList $ (\x -> (x, ([], []))) <$> ["Int", "Float", "Bool"]
           }
       )
     ]
+
+  where
+    basicOps =
+      [ ( "+",  Type.Lambda number     $ Type.Lambda number     number     )
+      , ( "-",  Type.Lambda number     $ Type.Lambda number     number     )
+      , ( "*",  Type.Lambda number     $ Type.Lambda number     number     )
+      , ( "/",  Type.Lambda float      $ Type.Lambda float      float      )
+      , ( ">",  Type.Lambda comparable $ Type.Lambda comparable bool       )
+      , ( ">=", Type.Lambda comparable $ Type.Lambda comparable bool       )
+      , ( "<",  Type.Lambda comparable $ Type.Lambda comparable bool       )
+      , ( "<=", Type.Lambda comparable $ Type.Lambda comparable bool       ) 
+      , ( "==", Type.Lambda a          $ Type.Lambda a          bool       ) 
+      , ( "/=", Type.Lambda a          $ Type.Lambda a          bool       ) 
+      , ( "^",  Type.Lambda number     $ Type.Lambda number     number     )
+      , ( "%",  Type.Lambda int        $ Type.Lambda int        int        )
+      , ( "//", Type.Lambda int        $ Type.Lambda int        int        )
+      , ( "&&", Type.Lambda bool       $ Type.Lambda bool       bool       )
+      , ( "||", Type.Lambda bool       $ Type.Lambda bool       bool       )
+      , ( "++", Type.Lambda appendable $ Type.Lambda appendable appendable ) 
+      ]
 
 
 defaultCoreInterface :: Module.Interface
@@ -61,3 +82,33 @@ defaultCoreInterface =
 a :: Type.Canonical
 a =
   Type.Var "a"
+
+
+comparable :: Type.Canonical
+comparable =
+  Type.Var "comparable"
+
+
+appendable :: Type.Canonical
+appendable =
+  Type.Var "appendable"
+
+
+number :: Type.Canonical
+number =
+  Type.Var "number"
+
+
+float :: Type.Canonical
+float =
+  Type.Type (Variable.inCore ["Basics"] "Float")
+
+
+int :: Type.Canonical
+int =
+  Type.Type (Variable.inCore ["Basics"] "Int")
+
+
+bool :: Type.Canonical
+bool =
+  Type.Type (Variable.inCore ["Basics"] "Bool")

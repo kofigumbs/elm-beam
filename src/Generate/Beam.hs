@@ -185,8 +185,14 @@ noFailure =
 
 
 inCore :: Var.Canonical -> Bool
-inCore (Var.Canonical (Var.Module (ModuleName.Canonical pkg _)) _) = pkg == Package.core
-inCore _                                              = False
+inCore var =
+  case var of
+    Var.Canonical (Var.Module (ModuleName.Canonical home _)) _ ->
+      Package.core == home
+
+    _ ->
+      False
+
 
 
 -- ENVIRONMENT
