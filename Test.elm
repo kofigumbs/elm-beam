@@ -1,4 +1,5 @@
-import Platform exposing ((+))
+import Platform
+import Basics exposing (..)
 
 main : Platform.Program () () ()
 main =

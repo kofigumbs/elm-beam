@@ -17,42 +17,47 @@ modules =
 
 interfaces :: Module.Interfaces
 interfaces =
-  Map.singleton (ModuleName.inCore ["Platform"]) $
-    Module.Interface
-      { Module.iVersion  = Compiler.version
-      , Module.iPackage  = Package.core
-      , Module.iExports  = imports
-      , Module.iImports  = mempty
-      , Module.iTypes    = types
-      , Module.iUnions   = unions
-      , Module.iAliases  = mempty
-      , Module.iFixities = mempty
-      }
-
-
-imports :: [Variable.Value]
-imports =
-  [ Variable.Union "Program" Variable.closedListing
-  , Variable.Value "server"
-  , Variable.Value "+"
-  ]
-
-
-types :: Module.Types
-types =
   Map.fromList
-    [ ( "server"
-      , Type.Lambda (Type.Var "a") $
-          Type.App
-            (Type.Type (Variable.inCore ["Platform"] "Program"))
-            [ Type.Var "flags", Type.Var "model", Type.Var "msg" ]
+    [ ( ModuleName.inCore ["Platform"]
+      , defaultCoreInterface
+          { Module.iExports = 
+              [ Variable.Union "Program" Variable.closedListing
+              , Variable.Value "server"
+              ]
+          , Module.iTypes   = 
+              Map.singleton "server" $
+                Type.Lambda a $
+                  Type.App
+                    (Type.Type (Variable.inCore ["Platform"] "Program"))
+                    [ Type.Var "flags", Type.Var "model", Type.Var "msg" ]
+          , Module.iUnions  =
+              Map.singleton "Program" ([ "flags", "model", "msg" ], [])
+          }
       )
-    , ( "+"
-      , Type.Lambda (Type.Var "a") $ Type.Lambda (Type.Var "a") (Type.Var "a")
+    , ( ModuleName.inCore ["Basics"]
+      , defaultCoreInterface
+          { Module.iExports = [ Variable.Value "+" ]
+          , Module.iTypes   = 
+              Map.singleton "+" $ Type.Lambda a $ Type.Lambda a a
+          }
       )
     ]
 
 
-unions :: Module.Unions
-unions =
-  Map.singleton "Program" ([ "flags", "model", "msg" ], [])
+defaultCoreInterface :: Module.Interface
+defaultCoreInterface =
+  Module.Interface
+    { Module.iVersion  = Compiler.version
+    , Module.iPackage  = Package.core
+    , Module.iExports  = mempty
+    , Module.iImports  = mempty
+    , Module.iTypes    = mempty
+    , Module.iUnions   = mempty
+    , Module.iAliases  = mempty
+    , Module.iFixities = mempty
+    }
+
+
+a :: Type.Canonical
+a =
+  Type.Var "a"
