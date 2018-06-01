@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Generate.Beam (generate) where
 
-import Codec.Beam.Bifs (Erlang'splus_2(..))
+import Codec.Beam.Bifs
 import qualified Codec.Beam as Beam
 import qualified Codec.Beam.Instructions as I
 import qualified Control.Monad.State as State
@@ -14,6 +14,7 @@ import qualified AST.Literal as Literal
 import qualified AST.Module as Module
 import qualified AST.Module.Name as ModuleName
 import qualified AST.Variable as Var
+import qualified Elm.Package as Package
 
 
 generate :: Module.Optimized -> LazyBytes.ByteString
@@ -104,13 +105,13 @@ fromExpr expr =
     Opt.Literal (Literal.IntNum number) ->
       return $ Value [] (Beam.toSource number)
 
-    Opt.Binop (Var.Canonical _ "+") left right ->
+    Opt.Binop operator left right | inCore operator ->
       do  tmp <- freshStackAllocation
           Value leftOps leftResult <- fromExpr left
           Value rightOps rightResult <- fromExpr right
           let ops =
                 leftOps ++ rightOps ++
-                  [ I.bif2 cannotFail Erlang'splus_2 leftResult rightResult tmp
+                  [ opBif operator leftResult rightResult tmp
                   ]
           return $ Value ops (Beam.toSource tmp)
 
@@ -157,6 +158,38 @@ fromExpr expr =
 toMapPair :: String -> Value -> ( Beam.Source, Beam.Source )
 toMapPair key (Value _ value) =
   ( Beam.toSource $ Beam.Atom (Text.pack key), value )
+
+
+opBif :: Var.Canonical -> Beam.Source -> Beam.Source -> Beam.Y -> Beam.Op
+opBif (Var.Canonical _ "+")  = I.bif2 noFailure Erlang'splus_2
+opBif (Var.Canonical _ "-")  = I.bif2 noFailure Erlang'sminus_2
+opBif (Var.Canonical _ "*")  = I.bif2 noFailure Erlang'stimes_2
+opBif (Var.Canonical _ "/")  = I.bif2 noFailure Erlang'div_2
+opBif (Var.Canonical _ ">")  = I.bif2 noFailure Erlang'sgt_2
+opBif (Var.Canonical _ ">=") = I.bif2 noFailure Erlang'sge_2
+opBif (Var.Canonical _ "<")  = I.bif2 noFailure Erlang'slt_2
+opBif (Var.Canonical _ "<=") = I.bif2 noFailure Erlang'sle_2
+opBif (Var.Canonical _ "==") = I.bif2 noFailure Erlang'seqeq_2
+opBif (Var.Canonical _ "/=") = I.bif2 noFailure Erlang'sneqeq_2
+opBif (Var.Canonical _ "^")  = I.bif2 noFailure Math'pow
+opBif (Var.Canonical _ "%")  = I.bif2 noFailure Erlang'rem
+opBif (Var.Canonical _ "//") = I.bif2 noFailure Erlang'rem
+opBif (Var.Canonical _ "&&") = I.bif2 noFailure Erlang'band
+opBif (Var.Canonical _ "||") = I.bif2 noFailure Erlang'bor
+opBif (Var.Canonical _ "++") = I.bif2 noFailure Erlang'ebif_plusplus_2
+
+
+noFailure :: Beam.Label
+noFailure =
+  Beam.Label 0
+
+
+inCore :: Var.Canonical -> Bool
+inCore (Var.Canonical (Var.Module (ModuleName.Canonical pkg _)) _) = pkg == Package.core
+inCore _                                              = False
+
+
+-- ENVIRONMENT
 
 
 saveTopLevel :: ModuleName.Canonical -> String -> Beam.Label -> Gen ()
