@@ -2,14 +2,17 @@
 module Generate.Beam (generate) where
 
 import Codec.Beam.Bifs
-import Data.Monoid ((<>))
+import Data.Monoid ()
 import Data.Text (Text)
+import Data.Text.Lazy.Encoding (encodeUtf8)
 import qualified Codec.Beam as Beam
 import qualified Codec.Beam.Instructions as I
 import qualified Control.Monad.State as State
 import qualified Data.ByteString.Lazy as LazyBytes
+import qualified Data.Char as Char
 import qualified Data.Map as Map
 import qualified Data.Text as Text
+import qualified Data.Text.Lazy as LazyText
 
 import qualified AST.Expression.Optimized as Opt
 import qualified AST.Literal as Literal
@@ -45,7 +48,7 @@ type Gen a =
 data Env = Env
   { _nextLabel :: Int
   , _nextStackAllocation :: Int
-  , _references :: Map.Map Var.Canonical (Either Beam.Label Beam.X)
+  , _references :: Map.Map Var.Canonical Reference
   }
 
 data Value = Value
@@ -54,16 +57,22 @@ data Value = Value
   }
 
 
+data Reference
+  = Arg Beam.X
+  | Stack Beam.Y
+  | TopLevel Beam.Label
+
+
 fromDef :: ModuleName.Canonical -> Opt.Def -> Gen [Beam.Op]
 fromDef moduleName def =
   case def of
     Opt.Def _ "main" (Opt.Program _ (Opt.Call _ [ Opt.Record fields ])) ->
       let
-        Just init = lookup "init" fields
+        Just init_ = lookup "init" fields
         Just handleCall = lookup "handleCall" fields
       in
       (++)
-        <$> fromBody moduleName id "init" [ "_" ] (Opt.Data "ok" [ init ])
+        <$> fromBody moduleName id "init" [ "_" ] (Opt.Data "ok" [ init_ ])
         <*> do  let body = Opt.Call handleCall [ Opt.Var (Var.local "state") ]
                 fromBody moduleName id "handle_call" [ "_", "_", "state" ]
                   (Opt.Data "reply" [ body, body ])
@@ -73,6 +82,9 @@ fromDef moduleName def =
 
     Opt.Def _ name expr ->
       fromBody moduleName (namespace moduleName) name [] expr
+
+    Opt.TailDef _ _ _ _ ->
+      undefined
 
 
 fromBody
@@ -87,7 +99,7 @@ fromBody moduleName prefix name args body =
       post <- freshLabel
       resetStackAllocation
       saveTopLevel moduleName name post
-      sequence_ $ zipWith saveLocal args $ map Beam.X [0..]
+      sequence_ $ zipWith saveArg args $ map Beam.X [0..]
       Value bodyOps result <- fromExpr body
       stackNeeded <- getStackAllocations
       return $ concat
@@ -107,8 +119,28 @@ fromBody moduleName prefix name args body =
 fromExpr :: Opt.Expr -> Gen Value
 fromExpr expr =
   case expr of
-    Opt.Literal (Literal.IntNum number) ->
-      return $ Value [] (Beam.toSource number)
+    Opt.Literal literal ->
+      return $ Value [] (fromLiteral literal)
+
+    Opt.Var variable ->
+      withReference variable $ \reference ->
+        case reference of
+          Arg x ->
+            return $ Value [] (Beam.toSource x)
+
+          Stack y ->
+            return $ Value [] (Beam.toSource y)
+
+          TopLevel label ->
+            do  tmp <- freshStackAllocation
+                return $ Value
+                  [ I.call 0 label
+                  , I.move returnRegister tmp
+                  ]
+                  (Beam.toSource tmp)
+
+    Opt.ExplicitList _ ->
+      undefined
 
     Opt.Binop operator left right | inCore operator ->
       do  tmp <- freshStackAllocation
@@ -120,19 +152,46 @@ fromExpr expr =
                   ]
           return $ Value ops (Beam.toSource tmp)
 
-    Opt.Var variable ->
+    Opt.Binop _ _ _ ->
+      undefined
+
+    Opt.Function _ _ ->
+      undefined
+
+    Opt.Call (Opt.Var variable) args ->
       withReference variable $ \reference ->
         case reference of
-          Right register ->
-            return $ Value [] (Beam.toSource register)
+          Arg _ ->
+            undefined
 
-          Left label ->
+          Stack _ ->
+            undefined
+
+          TopLevel label ->
             do  tmp <- freshStackAllocation
-                return $ Value
-                  [ I.call 0 label
-                  , I.move returnRegister tmp
-                  ]
-                  (Beam.toSource tmp)
+                values <- mapM fromExpr args
+                let moveArg value i = I.move (_result value) (Beam.X i)
+                    ops = concatMap _ops values ++
+                      zipWith moveArg values [0..] ++
+                      [ I.call (length args) label
+                      , I.move returnRegister tmp
+                      ]
+                return $ Value ops (Beam.toSource tmp)
+
+    Opt.Call _ _ ->
+      undefined
+
+    Opt.TailCall _ _ _ ->
+      undefined
+
+    Opt.If _ _ ->
+      undefined
+
+    Opt.Let _ _ ->
+      undefined
+
+    Opt.Case _ _ _ ->
+      undefined
 
     Opt.Data constructor args ->
       do  tmp <- freshStackAllocation
@@ -144,6 +203,15 @@ fromExpr expr =
                   : map (I.put . _result) values
           return $ Value ops (Beam.toSource tmp)
 
+    Opt.DataAccess _ _ ->
+      undefined
+
+    Opt.Access _ _ ->
+      undefined
+
+    Opt.Update _ _ ->
+      undefined
+
     Opt.Record fields ->
       do  tmp <- freshStackAllocation
           values <- mapM (fromExpr . snd) fields
@@ -153,18 +221,48 @@ fromExpr expr =
                 ]
           return $ Value ops (Beam.toSource tmp)
 
-    Opt.Call (Opt.Var variable) args ->
-      withReference variable $ \reference ->
-        case reference of
-          Left label ->
-            do  tmp <- freshStackAllocation
-                values <- mapM fromExpr args
-                let ops = concatMap _ops values ++
-                      zipWith (\(Value _ v) -> I.move v . Beam.X) values [0..] ++
-                      [ I.call (length args) label
-                      , I.move returnRegister tmp
-                      ]
-                return $ Value ops (Beam.toSource tmp)
+    Opt.Cmd _ ->
+      undefined
+
+    Opt.Sub _ ->
+      undefined
+
+    Opt.OutgoingPort _ _ ->
+      undefined
+
+    Opt.IncomingPort _ _ ->
+      undefined
+
+    Opt.Program _ _ ->
+      undefined
+
+    Opt.GLShader _ _ _ ->
+      error "WebGL shaders are not supported for server programs"
+
+    Opt.Crash _ _ _ ->
+      undefined
+
+
+fromLiteral :: Literal.Literal -> Beam.Source
+fromLiteral literal =
+  case literal of
+    Literal.Chr char ->
+      Beam.toSource (Char.ord char)
+
+    Literal.Str string ->
+      Beam.toSource $ Beam.Binary (lazyBytes string)
+
+    Literal.IntNum number ->
+      Beam.toSource number
+
+    Literal.FloatNum number ->
+      Beam.toSource (Beam.Float number)
+
+    Literal.Boolean True ->
+      Beam.toSource ("true" :: Text)
+
+    Literal.Boolean False ->
+      Beam.toSource ("false" :: Text)
 
 
 toMapPair :: String -> Value -> ( Beam.Source, Beam.Source )
@@ -189,6 +287,7 @@ opBif (Var.Canonical _ "//") = I.bif2 noFailure Erlang'rem
 opBif (Var.Canonical _ "&&") = I.bif2 noFailure Erlang'band
 opBif (Var.Canonical _ "||") = I.bif2 noFailure Erlang'bor
 opBif (Var.Canonical _ "++") = I.bif2 noFailure Erlang'ebif_plusplus_2
+opBif var = error $ "binary operator (" ++ Var.toString var ++ ") is not handled."
 
 
 noFailure :: Beam.Label
@@ -213,6 +312,11 @@ namespace (ModuleName.Canonical package name) var =
     ++ "/" ++ var
 
 
+lazyBytes :: String -> LazyBytes.ByteString
+lazyBytes =
+  encodeUtf8 . LazyText.fromStrict . Text.pack
+
+
 
 -- ENVIRONMENT
 
@@ -221,19 +325,16 @@ saveTopLevel :: ModuleName.Canonical -> String -> Beam.Label -> Gen ()
 saveTopLevel moduleName name label =
   State.modify $ \env -> env
     { _references =
-        Map.insert (Var.topLevel moduleName name) (Left label) (_references env)
+        Map.insert (Var.topLevel moduleName name) (TopLevel label) (_references env)
     }
 
 
-saveLocal :: String -> Beam.X -> Gen ()
-saveLocal name register =
-  if name == "_" then
-    return ()
-  else
-    State.modify $ \env -> env
-      { _references =
-          Map.insert (Var.local name) (Right register) (_references env)
-      }
+saveArg :: String -> Beam.X -> Gen ()
+saveArg name register =
+  State.modify $ \env -> env
+    { _references =
+        Map.insert (Var.local name) (Arg register) (_references env)
+    }
 
 
 freshLabel :: Gen Beam.Label
@@ -260,15 +361,15 @@ getStackAllocations =
   State.gets _nextStackAllocation
 
 
-withReference :: Var.Canonical -> (Either Beam.Label Beam.X -> Gen a) -> Gen a
+withReference :: Var.Canonical -> (Reference -> Gen a) -> Gen a
 withReference variable f =
   do  maybeReference <- Map.lookup variable <$> State.gets _references
       case maybeReference of
-        Nothing ->
-          error $ "VARIABLE `" ++ Var.name variable ++ "` is unbound"
-
         Just reference ->
           f reference
+
+        Nothing ->
+          error $ "VARIABLE `" ++ Var.name variable ++ "` is unbound"
 
 
 returnRegister :: Beam.X

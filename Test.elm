@@ -5,17 +5,24 @@ import Platform
 
 
 type alias Session =
-    Int
+    { counter : Int
+    , optional : Optional ()
+    }
+
+
+type Optional a
+    = None
+    | Some a
 
 
 main : Platform.Program () () Session
 main =
     Platform.server
-        { init = 1
+        { init = Session 1 None
         , handleCall = handleCall
         }
 
 
 handleCall : Session -> Session
 handleCall session =
-    session + 1
+    { counter = session.counter + 1, optional = Some () }
