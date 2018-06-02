@@ -26,10 +26,15 @@ interfaces =
               ]
           , Module.iTypes   = 
               Map.singleton "server" $
-                Type.Lambda a $
-                  Type.App
+                Type.Lambda
+                  (Type.Record
+                    [ ( "init", a )
+                    , ( "handleCall", Type.Lambda a a )
+                    ]
+                    Nothing)
+                  (Type.App
                     (Type.Type (Variable.inCore ["Platform"] "Program"))
-                    [ Type.Var "flags", Type.Var "model", Type.Var "msg" ]
+                    [ Type.Var "flags", Type.Var "model", Type.Var "msg" ])
           , Module.iUnions  =
               Map.singleton "Program" ([ "flags", "model", "msg" ], [])
           }
@@ -46,22 +51,22 @@ interfaces =
 
   where
     basicOps =
-      [ ( "+",  Type.Lambda number     $ Type.Lambda number     number     )
-      , ( "-",  Type.Lambda number     $ Type.Lambda number     number     )
-      , ( "*",  Type.Lambda number     $ Type.Lambda number     number     )
-      , ( "/",  Type.Lambda float      $ Type.Lambda float      float      )
-      , ( ">",  Type.Lambda comparable $ Type.Lambda comparable bool       )
-      , ( ">=", Type.Lambda comparable $ Type.Lambda comparable bool       )
-      , ( "<",  Type.Lambda comparable $ Type.Lambda comparable bool       )
-      , ( "<=", Type.Lambda comparable $ Type.Lambda comparable bool       ) 
-      , ( "==", Type.Lambda a          $ Type.Lambda a          bool       ) 
-      , ( "/=", Type.Lambda a          $ Type.Lambda a          bool       ) 
-      , ( "^",  Type.Lambda number     $ Type.Lambda number     number     )
-      , ( "%",  Type.Lambda int        $ Type.Lambda int        int        )
-      , ( "//", Type.Lambda int        $ Type.Lambda int        int        )
-      , ( "&&", Type.Lambda bool       $ Type.Lambda bool       bool       )
-      , ( "||", Type.Lambda bool       $ Type.Lambda bool       bool       )
-      , ( "++", Type.Lambda appendable $ Type.Lambda appendable appendable ) 
+      [ ( "+",  binop number     number     number     )
+      , ( "-",  binop number     number     number     )
+      , ( "*",  binop number     number     number     )
+      , ( "/",  binop float      float      float      )
+      , ( ">",  binop comparable comparable bool       )
+      , ( ">=", binop comparable comparable bool       )
+      , ( "<",  binop comparable comparable bool       )
+      , ( "<=", binop comparable comparable bool       )
+      , ( "==", binop a          a          bool       )
+      , ( "/=", binop a          a          bool       )
+      , ( "^",  binop number     number     number     )
+      , ( "%",  binop int        int        int        )
+      , ( "//", binop int        int        int        )
+      , ( "&&", binop bool       bool       bool       )
+      , ( "||", binop bool       bool       bool       )
+      , ( "++", binop appendable appendable appendable )
       ]
 
 
@@ -77,6 +82,11 @@ defaultCoreInterface =
     , Module.iAliases  = mempty
     , Module.iFixities = mempty
     }
+
+
+binop :: Type.Canonical -> Type.Canonical -> Type.Canonical -> Type.Canonical
+binop left right returns =
+  Type.Lambda left (Type.Lambda right returns)
 
 
 a :: Type.Canonical

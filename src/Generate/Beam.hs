@@ -2,6 +2,8 @@
 module Generate.Beam (generate) where
 
 import Codec.Beam.Bifs
+import Data.Monoid ((<>))
+import Data.Text (Text)
 import qualified Codec.Beam as Beam
 import qualified Codec.Beam.Instructions as I
 import qualified Control.Monad.State as State
@@ -87,7 +89,7 @@ makeFunction moduleName name args body =
       stackNeeded <- getStackAllocations
       return $ concat
         [ [ I.label pre
-          , I.func_info (Text.pack name) (length args)
+          , I.func_info (topLevelName name) (length args)
           , I.label post
           , I.allocate stackNeeded (length args)
           ]
@@ -192,6 +194,11 @@ inCore var =
 
     _ ->
       False
+
+
+topLevelName :: String -> Text
+topLevelName base =
+  "__Main_" <> Text.pack base
 
 
 
