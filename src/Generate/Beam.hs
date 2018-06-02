@@ -60,27 +60,36 @@ fromDef moduleName def =
     Opt.Def _ "main" (Opt.Program _ (Opt.Call _ [ Opt.Record fields ])) ->
       let
         Just init = lookup "init" fields
-        Just (Opt.Function [ arg ] handleCall) = lookup "handleCall" fields
+        Just handleCall = lookup "handleCall" fields
       in
       (++)
-        <$> makeFunction moduleName "init" [ "_" ]
-              (Opt.Data "ok" [ init ])
-        <*> do  saveLocal arg (Beam.X 2)
-                makeFunction moduleName "handle_call" [ "_", "_", arg ]
-                  (Opt.Data "reply" [ handleCall, handleCall ])
+        <$> fromBody moduleName Text.pack "init" [ "_" ] (Opt.Data "ok" [ init ])
+        <*> fromHandler moduleName "handle_call" handleCall
 
     Opt.Def _ name (Opt.Function args expr) ->
-      makeFunction moduleName name args expr
+      fromBody moduleName (namespace moduleName) name args expr
 
     Opt.Def _ name expr ->
-      makeFunction moduleName name [] expr
-
-    Opt.TailDef _facts _name _labels _expr ->
-      undefined
+      fromBody moduleName (namespace moduleName) name [] expr
 
 
-makeFunction :: ModuleName.Canonical -> String -> [String] -> Opt.Expr -> Gen [Beam.Op]
-makeFunction moduleName name args body =
+fromHandler :: ModuleName.Canonical -> String -> Opt.Expr -> Gen [Beam.Op]
+fromHandler moduleName name expr =
+  case expr of
+    Opt.Function [ arg ] body ->
+      do  saveLocal arg (Beam.X 2)
+          fromBody moduleName Text.pack name [ "_", "_", arg ]
+            (Opt.Data "reply" [ body, body ])
+
+
+fromBody
+  :: ModuleName.Canonical
+  -> (String -> Text)
+  -> String
+  -> [String]
+  -> Opt.Expr
+  -> Gen [Beam.Op]
+fromBody moduleName prefix name args body =
   do  pre <- freshLabel
       post <- freshLabel
       resetStackAllocation
@@ -89,7 +98,7 @@ makeFunction moduleName name args body =
       stackNeeded <- getStackAllocations
       return $ concat
         [ [ I.label pre
-          , I.func_info (topLevelName name) (length args)
+          , I.func_info (prefix name) (length args)
           , I.label post
           , I.allocate stackNeeded (length args)
           ]
@@ -153,9 +162,6 @@ fromExpr expr =
                 ]
           return $ Value ops (Beam.toSource tmp)
 
-    _ ->
-      undefined
-
 
 toMapPair :: String -> Value -> ( Beam.Source, Beam.Source )
 toMapPair key (Value _ value) =
@@ -196,9 +202,12 @@ inCore var =
       False
 
 
-topLevelName :: String -> Text
-topLevelName base =
-  "__Main_" <> Text.pack base
+namespace :: ModuleName.Canonical -> String -> Text
+namespace (ModuleName.Canonical package name) var =
+  Text.pack $
+    Package.toString package
+      ++ "/" ++ ModuleName.toString name
+      ++ "/" ++ var
 
 
 
