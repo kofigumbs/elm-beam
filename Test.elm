@@ -1,9 +1,21 @@
-import Platform
-import Basics exposing (..)
+module Main exposing (..)
 
-main : Platform.Program () () ()
+import Basics exposing (..)
+import Platform
+
+
+type alias Session =
+    Int
+
+
+main : Platform.Program () () Session
 main =
     Platform.server
         { init = 1
-        , handleCall = \state -> state * 2
+        , handleCall = handleCall
         }
+
+
+handleCall : Session -> Session
+handleCall session =
+    session + 1

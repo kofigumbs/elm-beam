@@ -63,8 +63,10 @@ fromDef moduleName def =
         Just handleCall = lookup "handleCall" fields
       in
       (++)
-        <$> fromBody moduleName Text.pack "init" [ "_" ] (Opt.Data "ok" [ init ])
-        <*> fromHandler moduleName "handle_call" handleCall
+        <$> fromBody moduleName id "init" [ "_" ] (Opt.Data "ok" [ init ])
+        <*> do  let body = Opt.Call handleCall [ Opt.Var (Var.local "state") ]
+                fromBody moduleName id "handle_call" [ "_", "_", "state" ]
+                  (Opt.Data "reply" [ body, body ])
 
     Opt.Def _ name (Opt.Function args expr) ->
       fromBody moduleName (namespace moduleName) name args expr
@@ -73,18 +75,9 @@ fromDef moduleName def =
       fromBody moduleName (namespace moduleName) name [] expr
 
 
-fromHandler :: ModuleName.Canonical -> String -> Opt.Expr -> Gen [Beam.Op]
-fromHandler moduleName name expr =
-  case expr of
-    Opt.Function [ arg ] body ->
-      do  saveLocal arg (Beam.X 2)
-          fromBody moduleName Text.pack name [ "_", "_", arg ]
-            (Opt.Data "reply" [ body, body ])
-
-
 fromBody
   :: ModuleName.Canonical
-  -> (String -> Text)
+  -> (String -> String)
   -> String
   -> [String]
   -> Opt.Expr
@@ -94,11 +87,12 @@ fromBody moduleName prefix name args body =
       post <- freshLabel
       resetStackAllocation
       saveTopLevel moduleName name post
+      sequence_ $ zipWith saveLocal args $ map Beam.X [0..]
       Value bodyOps result <- fromExpr body
       stackNeeded <- getStackAllocations
       return $ concat
         [ [ I.label pre
-          , I.func_info (prefix name) (length args)
+          , I.func_info (Text.pack (prefix name)) (length args)
           , I.label post
           , I.allocate stackNeeded (length args)
           ]
@@ -127,21 +121,18 @@ fromExpr expr =
           return $ Value ops (Beam.toSource tmp)
 
     Opt.Var variable ->
-      do  reference <- Map.lookup variable <$> State.gets _references
-          tmp <- freshStackAllocation
-          case reference of
-            Nothing ->
-              error $ "VARIABLE `" ++ Var.name variable ++ "` is unbound"
+      withReference variable $ \reference ->
+        case reference of
+          Right register ->
+            return $ Value [] (Beam.toSource register)
 
-            Just (Right register) ->
-              return $ Value [] (Beam.toSource register)
-
-            Just (Left label) ->
-              return $ Value
-                [ I.call 0 label
-                , I.move returnRegister tmp
-                ]
-                (Beam.toSource tmp)
+          Left label ->
+            do  tmp <- freshStackAllocation
+                return $ Value
+                  [ I.call 0 label
+                  , I.move returnRegister tmp
+                  ]
+                  (Beam.toSource tmp)
 
     Opt.Data constructor args ->
       do  tmp <- freshStackAllocation
@@ -161,6 +152,19 @@ fromExpr expr =
                     zipWith (toMapPair . fst) fields values
                 ]
           return $ Value ops (Beam.toSource tmp)
+
+    Opt.Call (Opt.Var variable) args ->
+      withReference variable $ \reference ->
+        case reference of
+          Left label ->
+            do  tmp <- freshStackAllocation
+                values <- mapM fromExpr args
+                let ops = concatMap _ops values ++
+                      zipWith (\(Value _ v) -> I.move v . Beam.X) values [0..] ++
+                      [ I.call (length args) label
+                      , I.move returnRegister tmp
+                      ]
+                return $ Value ops (Beam.toSource tmp)
 
 
 toMapPair :: String -> Value -> ( Beam.Source, Beam.Source )
@@ -202,12 +206,11 @@ inCore var =
       False
 
 
-namespace :: ModuleName.Canonical -> String -> Text
+namespace :: ModuleName.Canonical -> String -> String
 namespace (ModuleName.Canonical package name) var =
-  Text.pack $
-    Package.toString package
-      ++ "/" ++ ModuleName.toString name
-      ++ "/" ++ var
+  Package.toString package
+    ++ "/" ++ ModuleName.toString name
+    ++ "/" ++ var
 
 
 
@@ -224,10 +227,13 @@ saveTopLevel moduleName name label =
 
 saveLocal :: String -> Beam.X -> Gen ()
 saveLocal name register =
-  State.modify $ \env -> env
-    { _references =
-        Map.insert (Var.local name) (Right register) (_references env)
-    }
+  if name == "_" then
+    return ()
+  else
+    State.modify $ \env -> env
+      { _references =
+          Map.insert (Var.local name) (Right register) (_references env)
+      }
 
 
 freshLabel :: Gen Beam.Label
@@ -252,6 +258,17 @@ resetStackAllocation =
 getStackAllocations :: Gen Int
 getStackAllocations =
   State.gets _nextStackAllocation
+
+
+withReference :: Var.Canonical -> (Either Beam.Label Beam.X -> Gen a) -> Gen a
+withReference variable f =
+  do  maybeReference <- Map.lookup variable <$> State.gets _references
+      case maybeReference of
+        Nothing ->
+          error $ "VARIABLE `" ++ Var.name variable ++ "` is unbound"
+
+        Just reference ->
+          f reference
 
 
 returnRegister :: Beam.X

@@ -34,7 +34,7 @@ interfaces =
                     Nothing)
                   (Type.App
                     (Type.Type (Variable.inCore ["Platform"] "Program"))
-                    [ Type.Var "flags", Type.Var "model", Type.Var "msg" ])
+                    [ Type.Var "flags", Type.Var "msg", a ])
           , Module.iUnions  =
               Map.singleton "Program" ([ "flags", "model", "msg" ], [])
           }
