@@ -139,8 +139,15 @@ fromExpr expr =
                   ]
                   (Beam.toSource tmp)
 
-    Opt.ExplicitList _ ->
-      undefined
+    Opt.ExplicitList exprs ->
+      let
+        fromList [] =
+          fromData "[]" []
+        fromList (first : rest) =
+          do  firstValue <- fromExpr first
+              restValue  <- fromList rest
+              fromData "::" [ firstValue, restValue ]
+      in fromList exprs
 
     Opt.Binop operator left right | inCore operator ->
       do  tmp <- freshStackAllocation
@@ -194,14 +201,8 @@ fromExpr expr =
       undefined
 
     Opt.Data constructor args ->
-      do  tmp <- freshStackAllocation
-          values <- mapM fromExpr args
-          let ops = concatMap _ops values ++
-                I.test_heap (length args + 2) 0
-                  : I.put_tuple (length args + 1) tmp
-                  : I.put (Beam.Atom (Text.pack constructor))
-                  : map (I.put . _result) values
-          return $ Value ops (Beam.toSource tmp)
+      fromData constructor =<< mapM fromExpr args
+
 
     Opt.DataAccess _ _ ->
       undefined
@@ -265,6 +266,17 @@ fromLiteral literal =
       Beam.toSource ("false" :: Text)
 
 
+fromData :: String -> [ Value ] -> Gen Value
+fromData constructor values =
+  do  tmp <- freshStackAllocation
+      let ops = concatMap _ops values ++
+            I.test_heap (length values + 2) 0
+              : I.put_tuple (length values + 1) tmp
+              : I.put (Beam.Atom (Text.pack constructor))
+              : map (I.put . _result) values
+      return $ Value ops (Beam.toSource tmp)
+
+
 toMapPair :: String -> Value -> ( Beam.Source, Beam.Source )
 toMapPair key (Value _ value) =
   ( Beam.toSource $ Beam.Atom (Text.pack key), value )
@@ -287,7 +299,7 @@ opBif (Var.Canonical _ "//") = I.bif2 noFailure Erlang'rem
 opBif (Var.Canonical _ "&&") = I.bif2 noFailure Erlang'band
 opBif (Var.Canonical _ "||") = I.bif2 noFailure Erlang'bor
 opBif (Var.Canonical _ "++") = I.bif2 noFailure Erlang'ebif_plusplus_2
-opBif var = error $ "binary operator (" ++ Var.toString var ++ ") is not handled."
+opBif var = error $ "binary operator (" ++ Var.toString var ++ ") is not handled"
 
 
 noFailure :: Beam.Label
@@ -296,10 +308,10 @@ noFailure =
 
 
 inCore :: Var.Canonical -> Bool
-inCore var =
-  case var of
-    Var.Canonical (Var.Module (ModuleName.Canonical home _)) _ ->
-      Package.core == home
+inCore (Var.Canonical home _) =
+  case home of
+    Var.Module (ModuleName.Canonical pkg _) | Package.core == pkg ->
+      True
 
     _ ->
       False
@@ -309,7 +321,7 @@ namespace :: ModuleName.Canonical -> String -> String
 namespace (ModuleName.Canonical package name) var =
   Package.toString package
     ++ "/" ++ ModuleName.toString name
-    ++ "/" ++ var
+    ++ "#" ++ var
 
 
 lazyBytes :: String -> LazyBytes.ByteString

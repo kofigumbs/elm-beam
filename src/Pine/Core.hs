@@ -44,7 +44,13 @@ interfaces =
           { Module.iExports = Variable.Value . fst <$> basicOps
           , Module.iTypes   = Map.fromList basicOps
           , Module.iUnions  =
-              Map.fromList $ (\x -> (x, ([], []))) <$> ["Int", "Float", "Bool"]
+              Map.fromList
+                [ ( "Int", ([], []) )
+                , ( "Float", ([], []) )
+                , ( "Bool", ([], []) )
+                , ( "String", ([], []) )
+                , ( "List", ([], []) )
+                ]
           }
       )
     ]
