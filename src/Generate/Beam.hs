@@ -207,8 +207,19 @@ fromExpr expr =
     Opt.DataAccess _ _ ->
       undefined
 
-    Opt.Access _ _ ->
-      undefined
+    Opt.Access record field ->
+      do  fieldReg <- freshStackAllocation
+          valueReg <- freshStackAllocation
+          loopOnFail <- freshLabel
+          Value recordOps recordResult <- fromExpr record
+          let getOps =
+                [ I.label loopOnFail
+                , I.move (Text.pack field) fieldReg
+                , I.get_map_elements loopOnFail recordResult
+                    [ ( Beam.toRegister fieldReg, Beam.toRegister valueReg )
+                    ]
+                ]
+          return $ Value (recordOps ++ getOps) (Beam.toSource valueReg)
 
     Opt.Update _ _ ->
       undefined

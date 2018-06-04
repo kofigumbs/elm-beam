@@ -5,7 +5,8 @@ import Platform
 
 
 type alias Session =
-    List String
+    { counter : Int
+    }
 
 
 type Optional a
@@ -16,11 +17,11 @@ type Optional a
 main : Platform.Program () () Session
 main =
     Platform.server
-        { init = []
+        { init = Session 1
         , handleCall = handleCall
         }
 
 
 handleCall : Session -> Session
 handleCall session =
-    [ "a", "b", "c" ]
+    { counter = session.counter + 1 }
