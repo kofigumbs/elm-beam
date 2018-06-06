@@ -84,7 +84,7 @@ fromDef moduleName def =
       fromBody moduleName (namespace moduleName) name [] expr
 
     Opt.TailDef _ _ _ _ ->
-      undefined
+      error "TODO: tail definition"
 
 
 fromBody
@@ -132,12 +132,12 @@ fromExpr expr =
             return $ Value [] (Beam.toSource y)
 
           TopLevel label ->
-            do  tmp <- freshStackAllocation
+            do  dest <- freshStackAllocation
                 return $ Value
                   [ I.call 0 label
-                  , I.move returnRegister tmp
+                  , I.move returnRegister dest
                   ]
-                  (Beam.toSource tmp)
+                  (Beam.toSource dest)
 
     Opt.ExplicitList exprs ->
       let
@@ -150,109 +150,115 @@ fromExpr expr =
       in fromList exprs
 
     Opt.Binop operator left right | inCore operator ->
-      do  tmp <- freshStackAllocation
+      do  dest <- freshStackAllocation
           Value leftOps leftResult <- fromExpr left
           Value rightOps rightResult <- fromExpr right
           let ops =
                 leftOps ++ rightOps ++
-                  [ opBif operator leftResult rightResult tmp
+                  [ opBif operator leftResult rightResult dest
                   ]
-          return $ Value ops (Beam.toSource tmp)
+          return $ Value ops (Beam.toSource dest)
 
     Opt.Binop _ _ _ ->
-      undefined
+      error "TODO: binop"
 
     Opt.Function _ _ ->
-      undefined
+      error "TODO: function"
 
     Opt.Call (Opt.Var variable) args ->
       withReference variable $ \reference ->
         case reference of
           Arg _ ->
-            undefined
+            error "TODO: argument functinos"
 
           Stack _ ->
-            undefined
+            error "TODO: local functions"
 
           TopLevel label ->
-            do  tmp <- freshStackAllocation
+            do  dest <- freshStackAllocation
                 values <- mapM fromExpr args
                 let moveArg value i = I.move (_result value) (Beam.X i)
                     ops = concatMap _ops values ++
                       zipWith moveArg values [0..] ++
                       [ I.call (length args) label
-                      , I.move returnRegister tmp
+                      , I.move returnRegister dest
                       ]
-                return $ Value ops (Beam.toSource tmp)
+                return $ Value ops (Beam.toSource dest)
 
     Opt.Call _ _ ->
-      undefined
+      error "TODO: call"
 
     Opt.TailCall _ _ _ ->
-      undefined
+      error "TODO: tail call"
 
     Opt.If _ _ ->
-      undefined
+      error "TODO: if"
 
-    Opt.Let _ _ ->
-      undefined
+    Opt.Let locals body ->
+      do  mapM_ fromLetDef locals
+          fromExpr body
 
     Opt.Case _ _ _ ->
-      undefined
+      error "TODO: case"
 
     Opt.Data constructor args ->
       fromData constructor =<< mapM fromExpr args
 
 
-    Opt.DataAccess _ _ ->
-      undefined
+    Opt.DataAccess data_ index ->
+      do  dest <- freshStackAllocation
+          Value ops result <- fromExpr data_
+          let get =
+                [ I.move result dest
+                , I.get_tuple_element dest (index + 1) dest
+                ]
+          return $ Value (ops ++ get) (Beam.toSource dest)
 
     Opt.Access record field ->
-      do  fieldReg <- freshStackAllocation
-          valueReg <- freshStackAllocation
+      do  dest <- freshStackAllocation
           loopOnFail <- freshLabel
           Value recordOps recordResult <- fromExpr record
           let getOps =
                 [ I.label loopOnFail
-                , I.move (Text.pack field) fieldReg
+                , I.move (Text.pack field) dest
                 , I.get_map_elements loopOnFail recordResult
-                    [ ( Beam.toRegister fieldReg, Beam.toRegister valueReg )
+                    [ ( Beam.toRegister dest, Beam.toRegister dest )
                     ]
                 ]
-          return $ Value (recordOps ++ getOps) (Beam.toSource valueReg)
+          return $ Value (recordOps ++ getOps) (Beam.toSource dest)
 
     Opt.Update _ _ ->
-      undefined
+      error "TODO: update"
 
     Opt.Record fields ->
-      do  tmp <- freshStackAllocation
+      do  dest <- freshStackAllocation
           values <- mapM (fromExpr . snd) fields
           let ops = concatMap _ops values ++
-                [ I.put_map_assoc cannotFail (Beam.Map []) tmp $
+                [ I.put_map_assoc cannotFail (Beam.Map []) dest $
                     zipWith (toMapPair . fst) fields values
                 ]
-          return $ Value ops (Beam.toSource tmp)
+          return $ Value ops (Beam.toSource dest)
 
     Opt.Cmd _ ->
-      undefined
+      error "TODO: Cmd"
 
     Opt.Sub _ ->
-      undefined
+      error "TODO: Sub"
 
     Opt.OutgoingPort _ _ ->
-      undefined
+      error "TODO: Cmd-port"
 
     Opt.IncomingPort _ _ ->
-      undefined
+      error "TODO: Sub-port"
 
     Opt.Program _ _ ->
-      undefined
+      error "TODO: program"
 
     Opt.GLShader _ _ _ ->
       error "WebGL shaders are not supported for server programs"
 
     Opt.Crash _ _ _ ->
-      undefined
+      error "TODO: crash"
 
 
 fromLiteral :: Literal.Literal -> Beam.Source
@@ -279,13 +285,18 @@ fromLiteral literal =
 
 fromData :: String -> [ Value ] -> Gen Value
 fromData constructor values =
-  do  tmp <- freshStackAllocation
+  do  dest <- freshStackAllocation
       let ops = concatMap _ops values ++
             I.test_heap (length values + 2) 0
-              : I.put_tuple (length values + 1) tmp
+              : I.put_tuple (length values + 1) dest
               : I.put (Beam.Atom (Text.pack constructor))
               : map (I.put . _result) values
-      return $ Value ops (Beam.toSource tmp)
+      return $ Value ops (Beam.toSource dest)
+
+
+fromLetDef :: Opt.Def -> Gen Value
+fromLetDef _ =
+  undefined
 
 
 toMapPair :: String -> Value -> ( Beam.Source, Beam.Source )

@@ -4,14 +4,8 @@ import Basics exposing (..)
 import Platform
 
 
-type alias Session =
-    { counter : Int
-    }
-
-
-type Optional a
-    = None
-    | Some a
+type Session
+    = Session Int
 
 
 main : Platform.Program () () Session
@@ -23,5 +17,5 @@ main =
 
 
 handleCall : Session -> Session
-handleCall session =
-    { counter = session.counter + 1 }
+handleCall (Session i) =
+    Session (i + 1)
