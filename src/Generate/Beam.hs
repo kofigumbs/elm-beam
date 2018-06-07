@@ -191,6 +191,27 @@ fromExpr expr =
     Opt.TailCall _ _ _ ->
       error "TODO: tail call"
 
+    Opt.If [( condExpr, ifExpr )] elseExpr ->
+      do  condValue <- fromExpr condExpr
+          ifValue   <- fromExpr ifExpr
+          elseValue <- fromExpr elseExpr
+          elseJump  <- freshLabel
+          finalJump <- freshLabel
+          dest      <- freshStackAllocation
+          let ops = _ops condValue ++
+                [ I.is_eq elseJump (_result condValue) ("true" :: Text) ] ++
+                _ops ifValue ++
+                [ I.move (_result ifValue) dest
+                , I.jump finalJump
+                , I.label elseJump
+                ] ++
+                _ops elseValue ++
+                [ I.move (_result elseValue) dest
+                , I.label finalJump
+                ]
+          return $ Value ops (Beam.toSource dest)
+
+
     Opt.If _ _ ->
       error "TODO: if"
 

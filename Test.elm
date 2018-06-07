@@ -18,4 +18,7 @@ main =
 
 handleCall : Session -> Session
 handleCall (Session i) =
-    Session (i + 1)
+    if i >= 7 then
+        Session 0
+    else
+        Session (i + 1)
