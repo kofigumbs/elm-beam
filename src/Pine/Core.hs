@@ -43,14 +43,6 @@ interfaces =
       , defaultCoreInterface
           { Module.iExports = Variable.Value . fst <$> basicOps
           , Module.iTypes   = Map.fromList basicOps
-          , Module.iUnions  =
-              Map.fromList
-                [ ( "Int", ([], []) )
-                , ( "Float", ([], []) )
-                , ( "Bool", ([], []) )
-                , ( "String", ([], []) )
-                , ( "List", ([], []) )
-                ]
           }
       )
     ]
@@ -117,14 +109,14 @@ number =
 
 float :: Type.Canonical
 float =
-  Type.Type (Variable.inCore ["Basics"] "Float")
+  Type.Type (Variable.builtin "Float")
 
 
 int :: Type.Canonical
 int =
-  Type.Type (Variable.inCore ["Basics"] "Int")
+  Type.Type (Variable.builtin "Int")
 
 
 bool :: Type.Canonical
 bool =
-  Type.Type (Variable.inCore ["Basics"] "Bool")
+  Type.Type (Variable.builtin "Bool")
