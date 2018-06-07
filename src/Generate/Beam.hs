@@ -195,11 +195,12 @@ fromExpr expr =
       error "TODO: if"
 
     Opt.Let locals body ->
-      do  mapM_ fromLetDef locals
-          fromExpr body
+      do  preOps <- mapM fromLetDef locals
+          Value ops result <- fromExpr body
+          return $ Value (concat preOps ++ ops) result
 
-    Opt.Case _ _ _ ->
-      error "TODO: case"
+    Opt.Case _ decider _ ->
+      fromDecider decider
 
     Opt.Data constructor args ->
       fromData constructor =<< mapM fromExpr args
@@ -294,10 +295,34 @@ fromData constructor values =
       return $ Value ops (Beam.toSource dest)
 
 
-fromLetDef :: Opt.Def -> Gen Value
-fromLetDef _ =
-  undefined
+fromLetDef :: Opt.Def -> Gen [ Beam.Op ]
+fromLetDef def =
+  case def of
+    Opt.Def _ name expr ->
+      do  dest <- freshStackAllocation
+          Value ops result <- fromExpr expr
+          saveStack name dest
+          return $ ops ++ [ I.move result dest ]
+          
 
+    Opt.TailDef _ _ _ _ ->
+      undefined
+
+
+fromDecider :: Opt.Decider Opt.Choice -> Gen Value
+fromDecider decider =
+  case decider of
+    Opt.Leaf (Opt.Inline expr) ->
+      fromExpr expr
+
+    Opt.Leaf (Opt.Jump _) ->
+      error "leaf"
+
+    Opt.Chain _ _ _ ->
+      error "chain"
+
+    Opt.FanOut _ _ _ ->
+      error "fan out"
 
 toMapPair :: String -> Value -> ( Beam.Source, Beam.Source )
 toMapPair key (Value _ value) =
@@ -357,17 +382,23 @@ lazyBytes =
 
 saveTopLevel :: ModuleName.Canonical -> String -> Beam.Label -> Gen ()
 saveTopLevel moduleName name label =
-  State.modify $ \env -> env
-    { _references =
-        Map.insert (Var.topLevel moduleName name) (TopLevel label) (_references env)
-    }
+  save (Var.topLevel moduleName name) (TopLevel label)
 
 
 saveArg :: String -> Beam.X -> Gen ()
 saveArg name register =
+  save (Var.local name) (Arg register)
+
+
+saveStack :: String -> Beam.Y -> Gen ()
+saveStack name register =
+  save (Var.local name) (Stack register)
+
+
+save :: Var.Canonical -> Reference -> Gen ()
+save var reference =
   State.modify $ \env -> env
-    { _references =
-        Map.insert (Var.local name) (Arg register) (_references env)
+    { _references = Map.insert var reference (_references env)
     }
 
 
