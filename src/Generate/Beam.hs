@@ -191,29 +191,17 @@ fromExpr expr =
     Opt.TailCall _ _ _ ->
       error "TODO: tail call"
 
-    Opt.If [( condExpr, ifExpr )] elseExpr ->
-      do  condValue <- fromExpr condExpr
-          ifValue   <- fromExpr ifExpr
-          elseValue <- fromExpr elseExpr
-          elseJump  <- freshLabel
+    Opt.If branches elseExpr ->
+      do  elseValue <- fromExpr elseExpr
           finalJump <- freshLabel
           dest      <- freshStackAllocation
-          let ops = _ops condValue ++
-                [ I.is_eq elseJump (_result condValue) ("true" :: Text) ] ++
-                _ops ifValue ++
-                [ I.move (_result ifValue) dest
-                , I.jump finalJump
-                , I.label elseJump
-                ] ++
-                _ops elseValue ++
+          let elseOps = _ops elseValue ++
                 [ I.move (_result elseValue) dest
                 , I.label finalJump
                 ]
-          return $ Value ops (Beam.toSource dest)
-
-
-    Opt.If _ _ ->
-      error "TODO: if"
+          Value
+            <$> foldr (fromBranch finalJump dest) (return elseOps) branches
+            <*> return (Beam.toSource dest)
 
     Opt.Let locals body ->
       do  preOps <- mapM fromLetDef locals
@@ -298,11 +286,8 @@ fromLiteral literal =
     Literal.FloatNum number ->
       Beam.toSource (Beam.Float number)
 
-    Literal.Boolean True ->
-      Beam.toSource ("true" :: Text)
-
-    Literal.Boolean False ->
-      Beam.toSource ("false" :: Text)
+    Literal.Boolean bool ->
+      if bool then true else false
 
 
 fromData :: String -> [ Value ] -> Gen Value
@@ -345,6 +330,24 @@ fromDecider decider =
     Opt.FanOut _ _ _ ->
       error "fan out"
 
+
+fromBranch :: Beam.Label -> Beam.Y -> ( Opt.Expr, Opt.Expr ) -> Gen [ Beam.Op ] -> Gen [ Beam.Op ]
+fromBranch finalJump dest ( condExpr, ifExpr ) elseOps =
+  do  condValue <- fromExpr condExpr
+      ifValue   <- fromExpr ifExpr
+      elseJump  <- freshLabel
+      let ops = concat
+            [ _ops condValue
+            , [ I.is_eq elseJump (_result condValue) true ]
+            , _ops ifValue
+            , [ I.move (_result ifValue) dest
+              , I.jump finalJump
+              , I.label elseJump
+              ]
+            ]
+      fmap (ops ++) elseOps
+
+
 toMapPair :: String -> Value -> ( Beam.Source, Beam.Source )
 toMapPair key (Value _ value) =
   ( Beam.toSource $ Beam.Atom (Text.pack key), value )
@@ -368,6 +371,16 @@ opBif (Var.Canonical _ "&&") = I.bif2 noFailure Erlang'band
 opBif (Var.Canonical _ "||") = I.bif2 noFailure Erlang'bor
 opBif (Var.Canonical _ "++") = I.bif2 noFailure Erlang'ebif_plusplus_2
 opBif var = error $ "binary operator (" ++ Var.toString var ++ ") is not handled"
+
+
+true :: Beam.Source
+true =
+  Beam.toSource ("true" :: Text)
+
+
+false :: Beam.Source
+false =
+  Beam.toSource ("false" :: Text)
 
 
 noFailure :: Beam.Label
