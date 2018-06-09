@@ -220,9 +220,8 @@ fromExpr expr =
           Value recordOps recordResult <- fromExpr record
           let getOps =
                 [ I.label loopOnFail
-                , I.move (Text.pack field) dest
                 , I.get_map_elements loopOnFail recordResult
-                    [ ( Beam.toRegister dest, Beam.toRegister dest )
+                    [ ( Beam.toSource (Text.pack field), Beam.toRegister dest )
                     ]
                 ]
           return $ Value (recordOps ++ getOps) (Beam.toSource dest)
