@@ -153,10 +153,9 @@ fromExpr expr =
       do  dest <- freshStackAllocation
           Value leftOps leftResult <- fromExpr left
           Value rightOps rightResult <- fromExpr right
-          let ops =
-                leftOps ++ rightOps ++
-                  [ opBif operator leftResult rightResult dest
-                  ]
+          let ops = leftOps ++ rightOps ++
+                [ opBif operator leftResult rightResult dest
+                ]
           return $ Value ops (Beam.toSource dest)
 
     Opt.Binop variable left right -> 
@@ -247,10 +246,10 @@ fromExpr expr =
       error "TODO: Sub"
 
     Opt.OutgoingPort _ _ ->
-      error "TODO: Cmd-port"
+      error "TODO: outgoig port"
 
     Opt.IncomingPort _ _ ->
-      error "TODO: Sub-port"
+      error "TODO: incoming port"
 
     Opt.Program _ _ ->
       error "TODO: program"
