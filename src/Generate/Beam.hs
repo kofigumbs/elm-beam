@@ -58,8 +58,7 @@ data Value = Value
 
 
 data Reference
-  = Arg Beam.X
-  | Stack Beam.Y
+  = Local Beam.Y
   | TopLevel Beam.Label
 
 
@@ -95,11 +94,10 @@ fromBody
   -> Opt.Expr
   -> Gen [Beam.Op]
 fromBody moduleName prefix name args body =
-  do  pre <- freshLabel
-      post <- freshLabel
-      resetStackAllocation
-      saveTopLevel moduleName name post
-      sequence_ $ zipWith saveArg args $ map Beam.X [0..]
+  do  resetStackAllocation
+      pre <- freshLabel
+      post <- registerTopLevel moduleName name
+      argOps <- mapM registerArgument args
       Value bodyOps result <- fromExpr body
       stackNeeded <- getStackAllocations
       return $ concat
@@ -108,6 +106,7 @@ fromBody moduleName prefix name args body =
           , I.label post
           , I.allocate stackNeeded (length args)
           ]
+        , argOps
         , bodyOps
         , [ I.move result returnRegister
           , I.deallocate stackNeeded
@@ -125,10 +124,7 @@ fromExpr expr =
     Opt.Var variable ->
       withReference variable $ \reference ->
         case reference of
-          Arg x ->
-            return $ Value [] (Beam.toSource x)
-
-          Stack y ->
+          Local y ->
             return $ Value [] (Beam.toSource y)
 
           TopLevel label ->
@@ -161,8 +157,7 @@ fromExpr expr =
     Opt.Binop variable left right -> 
       withReference variable $ \reference ->
         case reference of
-          Arg _          -> error "operators are only allowed at top-level"
-          Stack _        -> error "operators are only allowed at top-level"
+          Local _        -> error "operators are only allowed at top-level"
           TopLevel label -> fromFunctionCall label [ left, right ]
 
     Opt.Function _ _ ->
@@ -171,8 +166,7 @@ fromExpr expr =
     Opt.Call (Opt.Var variable) args ->
       withReference variable $ \reference ->
         case reference of
-          Arg _          -> error "TODO: argument functinos"
-          Stack _        -> error "TODO: local functions"
+          Local _        -> error "TODO: local functions"
           TopLevel label -> fromFunctionCall label args
 
     Opt.Call _ _ ->
@@ -307,14 +301,13 @@ fromLetDef :: Opt.Def -> Gen [ Beam.Op ]
 fromLetDef def =
   case def of
     Opt.Def _ name expr ->
-      do  dest <- freshStackAllocation
-          Value ops result <- fromExpr expr
-          saveStack name dest
+      do  Value ops result <- fromExpr expr
+          dest <- registerLocal name
           return $ ops ++ [ I.move result dest ]
           
 
     Opt.TailDef _ _ _ _ ->
-      undefined
+      error "TODO: tail-recursive let"
 
 
 fromDecider :: Opt.Decider Opt.Choice -> Gen Value
@@ -416,19 +409,24 @@ lazyBytes =
 -- ENVIRONMENT
 
 
-saveTopLevel :: ModuleName.Canonical -> String -> Beam.Label -> Gen ()
-saveTopLevel moduleName name label =
-  save (Var.topLevel moduleName name) (TopLevel label)
+registerTopLevel :: ModuleName.Canonical -> String -> Gen Beam.Label
+registerTopLevel moduleName name =
+  do  label <- freshLabel
+      save (Var.topLevel moduleName name) (TopLevel label)
+      return label
 
 
-saveArg :: String -> Beam.X -> Gen ()
-saveArg name register =
-  save (Var.local name) (Arg register)
+registerArgument :: String -> Gen Beam.Op
+registerArgument name =
+  do  y@(Beam.Y i) <- registerLocal name
+      return $ I.move (Beam.X i) y
 
 
-saveStack :: String -> Beam.Y -> Gen ()
-saveStack name register =
-  save (Var.local name) (Stack register)
+registerLocal :: String -> Gen Beam.Y
+registerLocal name =
+  do  y <- freshStackAllocation
+      save (Var.local name) (Local y)
+      return y
 
 
 save :: Var.Canonical -> Reference -> Gen ()

@@ -4,13 +4,13 @@ import Basics exposing (..)
 import Platform
 
 
+type alias Session =
+    { i : Int }
+
+
 (+++) : number -> number -> number
 (+++) a b =
     a + b
-
-
-type Session
-    = Session Int
 
 
 main : Platform.Program () () Session
@@ -22,10 +22,10 @@ main =
 
 
 handleCall : Session -> Session
-handleCall (Session i) =
+handleCall { i } =
     if i >= 7 then
-        Session -7
+        { i = -7 }
     else if i == -1 then
-        Session 1
+        { i = 1 }
     else
-        Session (i +++ 1)
+        { i = i +++ 1 }

@@ -14,5 +14,5 @@ gen_server:call(pine, {}).
 ### Debugging generated code
 
 ```
-io:format("~p", [beam_disasm:file(pine)]), nil.
+io:format("~p", [beam_disasm:file(pine)]), ''.
 ```
