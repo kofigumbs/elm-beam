@@ -205,19 +205,19 @@ fromExpr expr =
       fromRecord (Beam.Map []) fields
 
     Opt.Cmd _ ->
-      error "TODO: Cmd"
+      error "TODO"
 
     Opt.Sub _ ->
-      error "TODO: Sub"
+      error "TODO"
 
     Opt.OutgoingPort _ _ ->
-      error "TODO: outgoig port"
+      error "TODO"
 
     Opt.IncomingPort _ _ ->
-      error "TODO: incoming port"
+      error "TODO"
 
     Opt.Program _ _ ->
-      error "TODO: program"
+      error "TODO"
 
     Opt.GLShader _ _ _ ->
       error "shaders are not supported for server programs"
