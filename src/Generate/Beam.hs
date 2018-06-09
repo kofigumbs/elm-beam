@@ -196,17 +196,13 @@ fromExpr expr =
                 ]
           return $ Env.Value (recordOps ++ getOps) (Beam.toSource dest)
 
-    Opt.Update _ _ ->
-      error "TODO: update"
+    Opt.Update record fields ->
+      do  Env.Value recordOps recordResult <- fromExpr record
+          Env.Value fieldsOps fieldsResult <- fromRecord recordResult fields
+          return $ Env.Value (recordOps ++ fieldsOps) fieldsResult
 
     Opt.Record fields ->
-      do  dest <- Env.freshStackAllocation
-          values <- mapM (fromExpr . snd) fields
-          let ops = concatMap Env.ops values ++
-                [ I.put_map_assoc Env.cannotFail (Beam.Map []) dest $
-                    zipWith (toMapPair . fst) fields values
-                ]
-          return $ Env.Value ops (Beam.toSource dest)
+      fromRecord (Beam.Map []) fields
 
     Opt.Cmd _ ->
       error "TODO: Cmd"
@@ -257,6 +253,16 @@ fromData constructor values =
               : I.put_tuple (length values + 1) dest
               : I.put (Beam.Atom (Text.pack constructor))
               : map (I.put . Env.result) values
+      return $ Env.Value ops (Beam.toSource dest)
+
+
+fromRecord :: Beam.IsSource src => src -> [(String, Opt.Expr)] -> Env.Gen Env.Value
+fromRecord record fields =
+  do  dest <- Env.freshStackAllocation
+      valuePairs <- mapM (\(k, v) -> (,) k <$> fromExpr v) fields
+      let ops = concatMap (Env.ops . snd) valuePairs ++
+            [ I.put_map_assoc Env.cannotFail record dest $ map toMapPair valuePairs
+            ]
       return $ Env.Value ops (Beam.toSource dest)
 
 
@@ -319,8 +325,8 @@ fromBranch finalJump dest ( condExpr, ifExpr ) elseOps =
       fmap (ops ++) elseOps
 
 
-toMapPair :: String -> Env.Value -> ( Beam.Source, Beam.Source )
-toMapPair key (Env.Value _ value) =
+toMapPair :: (String, Env.Value) -> ( Beam.Source, Beam.Source )
+toMapPair (key, Env.Value _ value) =
   ( Beam.toSource $ Beam.Atom (Text.pack key), value )
 
 

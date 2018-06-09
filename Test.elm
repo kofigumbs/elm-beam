@@ -22,10 +22,10 @@ main =
 
 
 handleCall : Session -> Session
-handleCall { i } =
+handleCall ({ i } as s) =
     if i >= 7 then
         { i = -7 }
     else if i == -1 then
         { i = 1 }
     else
-        { i = i +++ 1 }
+        { s | i = i +++ 1 }
