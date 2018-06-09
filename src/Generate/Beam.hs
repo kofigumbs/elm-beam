@@ -159,8 +159,12 @@ fromExpr expr =
                   ]
           return $ Value ops (Beam.toSource dest)
 
-    Opt.Binop _ _ _ ->
-      error "TODO: binop"
+    Opt.Binop variable left right -> 
+      withReference variable $ \reference ->
+        case reference of
+          Arg _          -> error "operators are only allowed at top-level"
+          Stack _        -> error "operators are only allowed at top-level"
+          TopLevel label -> fromFunctionCall label [ left, right ]
 
     Opt.Function _ _ ->
       error "TODO: function"
@@ -168,22 +172,9 @@ fromExpr expr =
     Opt.Call (Opt.Var variable) args ->
       withReference variable $ \reference ->
         case reference of
-          Arg _ ->
-            error "TODO: argument functinos"
-
-          Stack _ ->
-            error "TODO: local functions"
-
-          TopLevel label ->
-            do  dest <- freshStackAllocation
-                values <- mapM fromExpr args
-                let moveArg value i = I.move (_result value) (Beam.X i)
-                    ops = concatMap _ops values ++
-                      zipWith moveArg values [0..] ++
-                      [ I.call (length args) label
-                      , I.move returnRegister dest
-                      ]
-                return $ Value ops (Beam.toSource dest)
+          Arg _          -> error "TODO: argument functinos"
+          Stack _        -> error "TODO: local functions"
+          TopLevel label -> fromFunctionCall label args
 
     Opt.Call _ _ ->
       error "TODO: call"
@@ -265,7 +256,7 @@ fromExpr expr =
       error "TODO: program"
 
     Opt.GLShader _ _ _ ->
-      error "WebGL shaders are not supported for server programs"
+      error "shaders are not supported for server programs"
 
     Opt.Crash _ _ _ ->
       error "TODO: crash"
@@ -301,6 +292,19 @@ fromData constructor values =
       return $ Value ops (Beam.toSource dest)
 
 
+fromFunctionCall :: Beam.Label -> [ Opt.Expr ] -> Gen Value
+fromFunctionCall label args =
+  do  dest <- freshStackAllocation
+      values <- mapM fromExpr args
+      let moveArg value i = I.move (_result value) (Beam.X i)
+          ops = concatMap _ops values ++
+            zipWith moveArg values [0..] ++
+            [ I.call (length args) label
+            , I.move returnRegister dest
+            ]
+      return $ Value ops (Beam.toSource dest)
+
+
 fromLetDef :: Opt.Def -> Gen [ Beam.Op ]
 fromLetDef def =
   case def of
@@ -322,13 +326,13 @@ fromDecider decider =
       fromExpr expr
 
     Opt.Leaf (Opt.Jump _) ->
-      error "leaf"
+      error "TODO: leaf"
 
     Opt.Chain _ _ _ ->
-      error "chain"
+      error "TODO: chain"
 
     Opt.FanOut _ _ _ ->
-      error "fan out"
+      error "TODO: fan out"
 
 
 fromBranch :: Beam.Label -> Beam.Y -> ( Opt.Expr, Opt.Expr ) -> Gen [ Beam.Op ] -> Gen [ Beam.Op ]

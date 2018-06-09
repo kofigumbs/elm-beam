@@ -4,6 +4,11 @@ import Basics exposing (..)
 import Platform
 
 
+(+++) : number -> number -> number
+(+++) a b =
+    a + b
+
+
 type Session
     = Session Int
 
@@ -23,4 +28,4 @@ handleCall (Session i) =
     else if i == -1 then
         Session 1
     else
-        Session (i + 1)
+        Session (i +++ 1)
