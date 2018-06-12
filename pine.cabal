@@ -58,6 +58,7 @@ Executable pine
       Elm.Package
       Elm.Utils
       Generate.Beam
+      Generate.Beam.BuiltIn
       Generate.Environment
       Generate.JavaScript.Helpers
       Generate.JavaScript.Variable

@@ -17,6 +17,7 @@ import qualified Data.Text as Text
 
 import qualified AST.Module.Name as ModuleName
 import qualified AST.Variable as Var
+import qualified Generate.Beam.BuiltIn as BuiltIn
 
 
 run :: ModuleName.Canonical -> Gen [ Beam.Op ] -> [ Beam.Op ]
@@ -28,43 +29,14 @@ run moduleName moduleOps =
     main =
       Var.Canonical (Var.TopLevel moduleName) "main"
   in
-  evaluate $ (++)
-    <$> moduleOps
-    <*> withReference main (\(TopLevel mainLabel _) -> prelude mainLabel)
-
-
-prelude :: Beam.Label -> Gen [ Beam.Op ]
-prelude mainLabel =
-  do  initPre  <- freshLabel
-      initPost <- freshLabel
-      handleCallPre  <- freshLabel
-      handleCallPost <- freshLabel
-      return
-        [ I.label initPre
-        , I.func_info "init" 1
-        , I.label initPost
-        , I.allocate 0 1
-        , I.call 0 mainLabel
-        , I.get_map_elements initPost {- TODO crash? -} returnRegister
-            [ ( Beam.toSource (Text.pack "init"), Beam.toRegister returnRegister )
-            ]
-        , I.deallocate 0
-        , I.return'
-
-        , I.label handleCallPre
-        , I.func_info "handle_call" 3
-        , I.label handleCallPost
-        , I.allocate 1 3
-        , I.move (Beam.X 2) (Beam.Y 0)
-        , I.call 0 mainLabel
-        , I.get_map_elements initPost {- TODO crash? -} returnRegister
-            [ ( Beam.toSource (Text.pack "handleCall"), Beam.toRegister (Beam.X 1) )
-            ]
-        , I.move (Beam.Y 0) (Beam.X 0)
-        , I.call_fun 1
-        , I.deallocate 0
-        , I.return'
-        ]
+  evaluate $ concatM
+    [ moduleOps
+    , withReference main $ \(TopLevel label _) ->
+        concatM
+          [ BuiltIn.init label <$> freshLabel <*> freshLabel
+          , BuiltIn.handleCall label <$> freshLabel <*> freshLabel
+          ]
+    ]
 
 
 metadata :: [ Beam.Metadata ]
@@ -167,6 +139,10 @@ withReference variable f =
         Nothing ->
           error $ "VARIABLE `" ++ Var.name variable ++ "` is unbound"
 
+
+concatM :: Monad m => [ m [ a ] ] -> m [ a ]
+concatM [] = return []
+concatM (m:ms) = (++) <$> m <*> concatM ms
 
 
 -- BEAM HELPERS
