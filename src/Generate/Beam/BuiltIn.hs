@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Generate.Beam.BuiltIn (init, handleCall) where
+module Generate.Beam.BuiltIn (init, handleCall, server) where
 
 import qualified Codec.Beam as Beam
 import qualified Codec.Beam.Instructions as I
@@ -37,5 +37,14 @@ handleCall main pre post =
   , I.move (Beam.Y 0) (Beam.X 0)
   , I.call_fun 1
   , I.deallocate 0
+  , I.return'
+  ]
+
+
+server :: Beam.Label -> Beam.Label -> [ Beam.Op ]
+server pre post =
+  [ I.label pre
+  , I.func_info "server" 1
+  , I.label post
   , I.return'
   ]

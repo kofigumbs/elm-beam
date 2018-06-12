@@ -30,7 +30,10 @@ run moduleName moduleOps =
       Var.Canonical (Var.TopLevel moduleName) "main"
   in
   evaluate $ concatM
-    [ moduleOps
+    [ BuiltIn.server
+        <$> freshLabel
+        <*> registerModule (ModuleName.inCore ["Platform"]) "server" 1
+    , moduleOps
     , withReference main $ \(TopLevel label _) ->
         concatM
           [ BuiltIn.init label <$> freshLabel <*> freshLabel
@@ -76,6 +79,13 @@ data Reference
 
 
 -- MODIFY
+
+
+registerModule :: ModuleName.Canonical -> String -> Int -> Gen Beam.Label
+registerModule moduleName name arity =
+  do  label <- freshLabel
+      save (Var.fromModule moduleName name) (TopLevel label arity)
+      return label
 
 
 registerTopLevel :: ModuleName.Canonical -> String -> Int -> Gen Beam.Label
