@@ -16,9 +16,14 @@ type alias Session =
 main : Platform.Program () () Session
 main =
     Platform.server
-        { init = Session 1
+        { init = init
         , handleCall = handleCall
         }
+
+
+init : Session
+init =
+    Session 1
 
 
 handleCall : Session -> Session

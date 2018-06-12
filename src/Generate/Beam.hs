@@ -27,31 +27,13 @@ generate (Module.Module moduleName _ info) =
   let
     defs = Module.program info
   in
-  Beam.encode "pine"
-    [ Beam.insertModuleInfo
-    , Beam.export "init" 1
-    , Beam.export "handle_call" 3
-    , Beam.export "handle_cast" 2
-    , Beam.export "handle_info" 2
-    , Beam.export "terminate" 2
-    , Beam.export "code_change" 3
-    ] $ Env.run $ concat <$> mapM (fromDef moduleName) defs
+  Beam.encode "pine" Env.metadata
+     $ Env.run moduleName $ concat <$> mapM (fromDef moduleName) defs
 
 
 fromDef :: ModuleName.Canonical -> Opt.Def -> Env.Gen [Beam.Op]
 fromDef moduleName def =
   case def of
-    Opt.Def _ "main" (Opt.Program _ (Opt.Call _ [ Opt.Record fields ])) ->
-      let
-        Just init_ = lookup "init" fields
-        Just handleCall = lookup "handleCall" fields
-      in
-      (++)
-        <$> fromBody moduleName id "init" [ "_" ] (Opt.Data "ok" [ init_ ])
-        <*> do  let body = Opt.Call handleCall [ Opt.Var (Var.local "state") ]
-                fromBody moduleName id "handle_call" [ "_", "_", "state" ]
-                  (Opt.Data "reply" [ body, body ])
-
     Opt.Def _ name (Opt.Function args expr) ->
       fromBody moduleName (namespace moduleName) name args expr
 
@@ -98,26 +80,7 @@ fromExpr expr =
       return $ Env.Value [] (fromLiteral literal)
 
     Opt.Var variable ->
-      Env.withReference variable $ \reference ->
-        case reference of
-          Env.Local y ->
-            return $ Env.Value [] (Beam.toSource y)
-
-          Env.TopLevel label 0 ->
-            do  dest <- Env.freshStackAllocation
-                return $ Env.Value
-                  [ I.call 0 label
-                  , I.move Env.returnRegister dest
-                  ]
-                  (Beam.toSource dest)
-
-          Env.TopLevel label arity ->
-            do  dest <- Env.freshStackAllocation
-                return $ Env.Value
-                  [ I.make_fun2 $ Beam.Lambda (lambdaName label) arity label 0
-                  , I.move Env.returnRegister dest
-                  ]
-                  (Beam.toSource dest)
+      fromVariable variable
 
     Opt.ExplicitList elements ->
       let
@@ -139,26 +102,15 @@ fromExpr expr =
           return $ Env.Value ops (Beam.toSource dest)
 
     Opt.Binop variable left right -> 
-      fromExpr $ Opt.Call (Opt.Var variable) [ left, right ]
+      do  functionValue <- fromVariable variable
+          fromFunctionCall functionValue =<< mapM fromExpr [ left, right ]
 
     Opt.Function _ _ ->
       error "TODO: function"
 
     Opt.Call function args ->
-      do  dest <- Env.freshStackAllocation
-          Env.Value functionOps functionResult <- fromExpr function
-          values <- mapM fromExpr args
-          let moveArg value i = I.move (Env.result value) (Beam.X i)
-              ops = concat
-                [ concatMap Env.ops values
-                , functionOps
-                , zipWith moveArg values [0..]
-                , [ I.move functionResult (Beam.X (length args))
-                  , I.call_fun (length args)
-                  , I.move Env.returnRegister dest
-                  ]
-                ]
-          return $ Env.Value ops (Beam.toSource dest)
+      do  functionValue <- fromExpr function
+          fromFunctionCall functionValue =<< mapM fromExpr args
 
     Opt.TailCall _ _ _ ->
       error "TODO: tail call"
@@ -185,7 +137,6 @@ fromExpr expr =
 
     Opt.Data constructor args ->
       fromData constructor =<< mapM fromExpr args
-
 
     Opt.DataAccess data_ index ->
       do  dest <- Env.freshStackAllocation
@@ -228,8 +179,8 @@ fromExpr expr =
     Opt.IncomingPort _ _ ->
       error "TODO"
 
-    Opt.Program _ _ ->
-      error "TODO"
+    Opt.Program _ program ->
+      fromExpr program
 
     Opt.GLShader _ _ _ ->
       error "shaders are not supported for server programs"
@@ -257,6 +208,30 @@ fromLiteral literal =
       if bool then true else false
 
 
+fromVariable :: Var.Canonical -> Env.Gen Env.Value
+fromVariable variable =
+  Env.withReference variable $ \reference ->
+    case reference of
+      Env.Local y ->
+        return $ Env.Value [] (Beam.toSource y)
+
+      Env.TopLevel label 0 ->
+        do  dest <- Env.freshStackAllocation
+            return $ Env.Value
+              [ I.call 0 label
+              , I.move Env.returnRegister dest
+              ]
+              (Beam.toSource dest)
+
+      Env.TopLevel label arity ->
+        do  dest <- Env.freshStackAllocation
+            return $ Env.Value
+              [ I.make_fun2 $ Beam.Lambda (lambdaName label) arity label 0
+              , I.move Env.returnRegister dest
+              ]
+              (Beam.toSource dest)
+
+
 fromData :: String -> [ Env.Value ] -> Env.Gen Env.Value
 fromData constructor values =
   do  dest <- Env.freshStackAllocation
@@ -265,6 +240,22 @@ fromData constructor values =
               : I.put_tuple (length values + 1) dest
               : I.put (Beam.Atom (Text.pack constructor))
               : map (I.put . Env.result) values
+      return $ Env.Value ops (Beam.toSource dest)
+
+
+fromFunctionCall :: Env.Value -> [ Env.Value ] -> Env.Gen Env.Value
+fromFunctionCall (Env.Value functionOps functionResult) argValues =
+  do  dest <- Env.freshStackAllocation
+      let moveArg value i = I.move (Env.result value) (Beam.X i)
+          ops = concat
+            [ concatMap Env.ops argValues
+            , functionOps
+            , zipWith moveArg argValues [0..]
+            , [ I.move functionResult (Beam.X (length argValues))
+              , I.call_fun (length argValues)
+              , I.move Env.returnRegister dest
+              ]
+            ]
       return $ Env.Value ops (Beam.toSource dest)
 
 
