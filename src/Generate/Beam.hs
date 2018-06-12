@@ -2,7 +2,7 @@
 module Generate.Beam (generate) where
 
 import Codec.Beam.Bifs
-import Data.Monoid ()
+import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Lazy.Encoding (encodeUtf8)
 import qualified Codec.Beam as Beam
@@ -72,7 +72,7 @@ fromBody
 fromBody moduleName prefix name args body =
   do  Env.resetStackAllocation
       pre <- Env.freshLabel
-      post <- Env.registerTopLevel moduleName name
+      post <- Env.registerTopLevel moduleName name (length args)
       argOps <- mapM Env.registerArgument args
       Env.Value bodyOps result <- fromExpr body
       stackNeeded <- Env.getStackAllocations
@@ -103,7 +103,7 @@ fromExpr expr =
           Env.Local y ->
             return $ Env.Value [] (Beam.toSource y)
 
-          Env.TopLevel label ->
+          Env.TopLevel label 0 ->
             do  dest <- Env.freshStackAllocation
                 return $ Env.Value
                   [ I.call 0 label
@@ -111,7 +111,15 @@ fromExpr expr =
                   ]
                   (Beam.toSource dest)
 
-    Opt.ExplicitList exprs ->
+          Env.TopLevel label arity ->
+            do  dest <- Env.freshStackAllocation
+                return $ Env.Value
+                  [ I.make_fun2 $ Beam.Lambda (lambdaName label) arity label 0
+                  , I.move Env.returnRegister dest
+                  ]
+                  (Beam.toSource dest)
+
+    Opt.ExplicitList elements ->
       let
         fromList [] =
           fromData "[]" []
@@ -119,7 +127,7 @@ fromExpr expr =
           do  firstValue <- fromExpr first
               restValue  <- fromList rest
               fromData "::" [ firstValue, restValue ]
-      in fromList exprs
+      in fromList elements
 
     Opt.Binop operator left right | inCore operator ->
       do  dest <- Env.freshStackAllocation
@@ -131,22 +139,26 @@ fromExpr expr =
           return $ Env.Value ops (Beam.toSource dest)
 
     Opt.Binop variable left right -> 
-      Env.withReference variable $ \reference ->
-        case reference of
-          Env.Local _        -> error "operators are only allowed at top-level"
-          Env.TopLevel label -> fromFunctionCall label [ left, right ]
+      fromExpr $ Opt.Call (Opt.Var variable) [ left, right ]
 
     Opt.Function _ _ ->
       error "TODO: function"
 
-    Opt.Call (Opt.Var variable) args ->
-      Env.withReference variable $ \reference ->
-        case reference of
-          Env.Local _        -> error "TODO: local functions"
-          Env.TopLevel label -> fromFunctionCall label args
-
-    Opt.Call _ _ ->
-      error "TODO: call"
+    Opt.Call function args ->
+      do  dest <- Env.freshStackAllocation
+          Env.Value functionOps functionResult <- fromExpr function
+          values <- mapM fromExpr args
+          let moveArg value i = I.move (Env.result value) (Beam.X i)
+              ops = concat
+                [ concatMap Env.ops values
+                , functionOps
+                , zipWith moveArg values [0..]
+                , [ I.move functionResult (Beam.X (length args))
+                  , I.call_fun (length args)
+                  , I.move Env.returnRegister dest
+                  ]
+                ]
+          return $ Env.Value ops (Beam.toSource dest)
 
     Opt.TailCall _ _ _ ->
       error "TODO: tail call"
@@ -164,7 +176,7 @@ fromExpr expr =
             <*> return (Beam.toSource dest)
 
     Opt.Let locals body ->
-      do  preOps <- mapM fromLetDef locals
+      do  preOps <- mapM fromLet locals
           Env.Value ops result <- fromExpr body
           return $ Env.Value (concat preOps ++ ops) result
 
@@ -223,7 +235,7 @@ fromExpr expr =
       error "shaders are not supported for server programs"
 
     Opt.Crash _ _ _ ->
-      error "TODO: crash"
+      error "TODO"
 
 
 fromLiteral :: Literal.Literal -> Beam.Source
@@ -266,21 +278,8 @@ fromRecord record fields =
       return $ Env.Value ops (Beam.toSource dest)
 
 
-fromFunctionCall :: Beam.Label -> [ Opt.Expr ] -> Env.Gen Env.Value
-fromFunctionCall label args =
-  do  dest <- Env.freshStackAllocation
-      values <- mapM fromExpr args
-      let moveArg value i = I.move (Env.result value) (Beam.X i)
-          ops = concatMap Env.ops values ++
-            zipWith moveArg values [0..] ++
-            [ I.call (length args) label
-            , I.move Env.returnRegister dest
-            ]
-      return $ Env.Value ops (Beam.toSource dest)
-
-
-fromLetDef :: Opt.Def -> Env.Gen [ Beam.Op ]
-fromLetDef def =
+fromLet :: Opt.Def -> Env.Gen [ Beam.Op ]
+fromLet def =
   case def of
     Opt.Def _ name expr ->
       do  Env.Value ops result <- fromExpr expr
@@ -376,6 +375,11 @@ namespace (ModuleName.Canonical package name) var =
   Package.toString package
     ++ "/" ++ ModuleName.toString name
     ++ "#" ++ var
+
+
+lambdaName :: Beam.Label -> Text
+lambdaName (Beam.Label i) =
+  "__LAMBDA@" <> Text.pack (show i)
 
 
 lazyBytes :: String -> LazyBytes.ByteString

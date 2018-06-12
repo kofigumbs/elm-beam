@@ -42,17 +42,17 @@ data Value = Value
 
 data Reference
   = Local Beam.Y
-  | TopLevel Beam.Label
+  | TopLevel Beam.Label Int
 
 
 
 -- MODIFY
 
 
-registerTopLevel :: ModuleName.Canonical -> String -> Gen Beam.Label
-registerTopLevel moduleName name =
+registerTopLevel :: ModuleName.Canonical -> String -> Int -> Gen Beam.Label
+registerTopLevel moduleName name arity =
   do  label <- freshLabel
-      save (Var.topLevel moduleName name) (TopLevel label)
+      save (Var.topLevel moduleName name) (TopLevel label arity)
       return label
 
 
