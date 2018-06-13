@@ -34,3 +34,16 @@ handleCall ({ i } as s) =
         { i = 1 }
     else
         { s | i = i +++ 1 }
+
+
+
+-- MUTUALLY RECURSIVE
+-- f x =
+--     if x == 1 then
+--         1
+--     else
+--         g (x - 1)
+--
+--
+-- g y =
+--     f (y + 1)

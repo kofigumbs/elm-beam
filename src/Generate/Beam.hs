@@ -28,7 +28,14 @@ generate (Module.Module moduleName _ info) =
     defs = Module.program info
   in
   Beam.encode "pine" Env.metadata
-     $ Env.run moduleName $ concat <$> mapM (fromDef moduleName) defs
+     $ Env.run moduleName $
+       do  mapM_ forwardDeclare defs
+           concat <$> mapM (fromDef moduleName) defs
+
+
+forwardDeclare :: Opt.Def -> Env.Gen ()
+forwardDeclare _ =
+  return ()
 
 
 fromDef :: ModuleName.Canonical -> Opt.Def -> Env.Gen [Beam.Op]
