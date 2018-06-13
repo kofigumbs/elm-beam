@@ -47,7 +47,7 @@ metadata =
   [ Beam.insertModuleInfo
   , Beam.export "init" 1
   , Beam.export "handle_call" 3
-  -- TODO
+  -- TODO?
   -- , Beam.export "handle_cast" 2
   -- , Beam.export "handle_info" 2
   -- , Beam.export "terminate" 2

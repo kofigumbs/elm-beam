@@ -117,15 +117,17 @@ fromExpr expr =
           return $ Env.Value ops (Beam.toSource dest)
 
     Opt.Binop variable left right -> 
-      do  functionValue <- fromVariable variable
-          fromFunctionCall functionValue =<< mapM fromExpr [ left, right ]
+      fromExplicitCall variable [ left, right ]
 
     Opt.Function _ _ ->
       error "TODO: function"
 
+    Opt.Call (Opt.Var variable) args ->
+      fromExplicitCall variable args
+
     Opt.Call function args ->
-      do  functionValue <- fromExpr function
-          fromFunctionCall functionValue =<< mapM fromExpr args
+      do  Env.Value ops result <- fromExpr function
+          fromFunctionCall (asLambda result) ops =<< mapM fromExpr args
 
     Opt.TailCall _ _ _ ->
       error "TODO: tail call"
@@ -225,26 +227,30 @@ fromLiteral literal =
 
 fromVariable :: Var.Canonical -> Env.Gen Env.Value
 fromVariable variable =
-  Env.withReference variable $ \reference ->
-    case reference of
-      Env.Local y ->
-        return $ Env.Value [] (Beam.toSource y)
+  Env.withReference variable fromReference
 
-      Env.TopLevel label 0 ->
-        do  dest <- Env.freshStackAllocation
-            return $ Env.Value
-              [ I.call 0 label
-              , I.move Env.returnRegister dest
-              ]
-              (Beam.toSource dest)
 
-      Env.TopLevel label arity ->
-        do  dest <- Env.freshStackAllocation
-            return $ Env.Value
-              [ I.make_fun2 $ Beam.Lambda (lambdaName label) arity label 0
-              , I.move Env.returnRegister dest
-              ]
-              (Beam.toSource dest)
+fromReference :: Env.Reference -> Env.Gen Env.Value
+fromReference reference =
+  case reference of
+    Env.Local y ->
+      return $ Env.Value [] (Beam.toSource y)
+
+    Env.TopLevel label 0 ->
+      do  dest <- Env.freshStackAllocation
+          return $ Env.Value
+            [ I.call 0 label
+            , I.move Env.returnRegister dest
+            ]
+            (Beam.toSource dest)
+
+    Env.TopLevel label arity ->
+      do  dest <- Env.freshStackAllocation
+          return $ Env.Value
+            [ I.make_fun2 $ Beam.Lambda (lambdaName label) arity label 0
+            , I.move Env.returnRegister dest
+            ]
+            (Beam.toSource dest)
 
 
 fromData :: String -> [ Env.Value ] -> Env.Gen Env.Value
@@ -258,20 +264,40 @@ fromData constructor values =
       return $ Env.Value ops (Beam.toSource dest)
 
 
-fromFunctionCall :: Env.Value -> [ Env.Value ] -> Env.Gen Env.Value
-fromFunctionCall (Env.Value functionOps functionResult) argValues =
+fromExplicitCall :: Var.Canonical -> [ Opt.Expr ] -> Env.Gen Env.Value
+fromExplicitCall variable args =
+  Env.withReference variable $ \reference ->
+    case reference of
+      Env.TopLevel label arity | arity == length args ->
+        fromFunctionCall (asFunction label) [] =<< mapM fromExpr args
+
+      _ ->
+        do  Env.Value ops result <- fromReference reference
+            fromFunctionCall (asLambda result) ops =<< mapM fromExpr args
+
+
+fromFunctionCall :: (Int -> [ Beam.Op ]) -> [ Beam.Op ] -> [ Env.Value ] -> Env.Gen Env.Value
+fromFunctionCall callConv functionOps argValues =
   do  dest <- Env.freshStackAllocation
       let moveArg value i = I.move (Env.result value) (Beam.X i)
           ops = concat
             [ concatMap Env.ops argValues
             , functionOps
             , zipWith moveArg argValues [0..]
-            , [ I.move functionResult (Beam.X (length argValues))
-              , I.call_fun (length argValues)
-              , I.move Env.returnRegister dest
-              ]
+            , callConv (length argValues)
+            , [ I.move Env.returnRegister dest ]
             ]
       return $ Env.Value ops (Beam.toSource dest)
+
+
+asLambda :: Beam.Source -> Int -> [ Beam.Op ]
+asLambda fun arity =
+  [ I.move fun (Beam.X arity), I.call_fun arity ]
+
+
+asFunction :: Beam.Label -> Int -> [ Beam.Op ]
+asFunction label arity =
+  [ I.call arity label ]
 
 
 fromRecord :: Beam.IsSource src => src -> [(String, Opt.Expr)] -> Env.Gen Env.Value
