@@ -236,18 +236,12 @@ fromReference reference =
     Env.Local y ->
       return $ Env.Value [] (Beam.toSource y)
 
-    Env.TopLevel label 0 ->
-      do  dest <- Env.freshStackAllocation
-          return $ Env.Value
-            [ I.call 0 label
-            , I.move Env.returnRegister dest
-            ]
-            (Beam.toSource dest)
-
     Env.TopLevel label arity ->
       do  dest <- Env.freshStackAllocation
           return $ Env.Value
-            [ I.make_fun2 $ Beam.Lambda (lambdaName label) arity label 0
+            [ if arity == 0
+                 then I.call 0 label
+                 else I.make_fun2 $ Beam.Lambda (lambdaName label) arity label 0
             , I.move Env.returnRegister dest
             ]
             (Beam.toSource dest)
