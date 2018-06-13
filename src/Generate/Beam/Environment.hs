@@ -1,5 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Generate.Environment
+module Generate.Beam.Environment
   ( run, metadata, Gen
   , Value(..), Reference(..)
   , freshLabel

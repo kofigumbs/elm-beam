@@ -59,7 +59,8 @@ Executable pine
       Elm.Utils
       Generate.Beam
       Generate.Beam.BuiltIn
-      Generate.Environment
+      Generate.Beam.Environment
+      Generate.Beam.Variable
       Generate.JavaScript.Helpers
       Generate.JavaScript.Variable
       Nitpick.Pattern

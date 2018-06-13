@@ -2,7 +2,6 @@
 module Generate.Beam (generate) where
 
 import Codec.Beam.Bifs
-import Data.Monoid ((<>))
 import Data.Text (Text)
 import Data.Text.Lazy.Encoding (encodeUtf8)
 import qualified Codec.Beam as Beam
@@ -19,7 +18,8 @@ import qualified AST.Module as Module
 import qualified AST.Module.Name as ModuleName
 import qualified AST.Variable as Var
 import qualified Elm.Package as Package
-import qualified Generate.Environment as Env
+import qualified Generate.Beam.Environment as Env
+import qualified Generate.Beam.Variable as BeamVar
 
 
 generate :: Module.Optimized -> LazyBytes.ByteString
@@ -95,7 +95,7 @@ fromExpr expr =
       return $ Env.Value [] (fromLiteral literal)
 
     Opt.Var variable ->
-      fromVariable variable
+      BeamVar.standalone variable
 
     Opt.ExplicitList elements ->
       let
@@ -107,9 +107,9 @@ fromExpr expr =
               fromData "::" [ firstValue, restValue ]
       in fromList elements
 
-    Opt.Binop operator left right | inCore operator ->
+    Opt.Binop operator left right | builtIn operator ->
       do  dest <- Env.freshStackAllocation
-          Env.Value leftOps leftResult <- fromExpr left
+          Env.Value leftOps leftResult   <- fromExpr left
           Env.Value rightOps rightResult <- fromExpr right
           let ops = leftOps ++ rightOps ++
                 [ opBif operator leftResult rightResult dest
@@ -117,17 +117,18 @@ fromExpr expr =
           return $ Env.Value ops (Beam.toSource dest)
 
     Opt.Binop variable left right -> 
-      fromExplicitCall variable [ left, right ]
+      BeamVar.explicitCall variable =<< mapM fromExpr [ left, right ]
 
     Opt.Function _ _ ->
       error "TODO: function"
 
     Opt.Call (Opt.Var variable) args ->
-      fromExplicitCall variable args
+      BeamVar.explicitCall variable =<< mapM fromExpr args
 
     Opt.Call function args ->
-      do  Env.Value ops result <- fromExpr function
-          fromFunctionCall (asLambda result) ops =<< mapM fromExpr args
+      do  functionValue <- fromExpr function
+          argValues     <- mapM fromExpr args
+          BeamVar.genericCall functionValue argValues
 
     Opt.TailCall _ _ _ ->
       error "TODO: tail call"
@@ -225,28 +226,6 @@ fromLiteral literal =
       if bool then true else false
 
 
-fromVariable :: Var.Canonical -> Env.Gen Env.Value
-fromVariable variable =
-  Env.withReference variable fromReference
-
-
-fromReference :: Env.Reference -> Env.Gen Env.Value
-fromReference reference =
-  case reference of
-    Env.Local y ->
-      return $ Env.Value [] (Beam.toSource y)
-
-    Env.TopLevel label arity ->
-      do  dest <- Env.freshStackAllocation
-          return $ Env.Value
-            [ if arity == 0
-                 then I.call 0 label
-                 else I.make_fun2 $ Beam.Lambda (lambdaName label) arity label 0
-            , I.move Env.returnRegister dest
-            ]
-            (Beam.toSource dest)
-
-
 fromData :: String -> [ Env.Value ] -> Env.Gen Env.Value
 fromData constructor values =
   do  dest <- Env.freshStackAllocation
@@ -256,42 +235,6 @@ fromData constructor values =
               : I.put (Beam.Atom (Text.pack constructor))
               : map (I.put . Env.result) values
       return $ Env.Value ops (Beam.toSource dest)
-
-
-fromExplicitCall :: Var.Canonical -> [ Opt.Expr ] -> Env.Gen Env.Value
-fromExplicitCall variable args =
-  Env.withReference variable $ \reference ->
-    case reference of
-      Env.TopLevel label arity | arity == length args ->
-        fromFunctionCall (asFunction label) [] =<< mapM fromExpr args
-
-      _ ->
-        do  Env.Value ops result <- fromReference reference
-            fromFunctionCall (asLambda result) ops =<< mapM fromExpr args
-
-
-fromFunctionCall :: (Int -> [ Beam.Op ]) -> [ Beam.Op ] -> [ Env.Value ] -> Env.Gen Env.Value
-fromFunctionCall callConv functionOps argValues =
-  do  dest <- Env.freshStackAllocation
-      let moveArg value i = I.move (Env.result value) (Beam.X i)
-          ops = concat
-            [ concatMap Env.ops argValues
-            , functionOps
-            , zipWith moveArg argValues [0..]
-            , callConv (length argValues)
-            , [ I.move Env.returnRegister dest ]
-            ]
-      return $ Env.Value ops (Beam.toSource dest)
-
-
-asLambda :: Beam.Source -> Int -> [ Beam.Op ]
-asLambda fun arity =
-  [ I.move fun (Beam.X arity), I.call_fun arity ]
-
-
-asFunction :: Beam.Label -> Int -> [ Beam.Op ]
-asFunction label arity =
-  [ I.call arity label ]
 
 
 fromRecord :: Beam.IsSource src => src -> [(String, Opt.Expr)] -> Env.Gen Env.Value
@@ -386,8 +329,8 @@ false =
 
 
 
-inCore :: Var.Canonical -> Bool
-inCore (Var.Canonical home _) =
+builtIn :: Var.Canonical -> Bool
+builtIn (Var.Canonical home _) =
   case home of
     Var.Module (ModuleName.Canonical pkg _) | Package.core == pkg ->
       True
@@ -401,11 +344,6 @@ namespace (ModuleName.Canonical package name) var =
   Package.toString package
     ++ "/" ++ ModuleName.toString name
     ++ "#" ++ var
-
-
-lambdaName :: Beam.Label -> Text
-lambdaName (Beam.Label i) =
-  "__LAMBDA@" <> Text.pack (show i)
 
 
 lazyBytes :: String -> LazyBytes.ByteString
