@@ -16,8 +16,12 @@ init main pre post =
   , I.allocate 0 1
   , I.call 0 main
   , I.get_map_elements post {- TODO crash? -} (Beam.X 0)
-      [ ( Beam.toSource (Text.pack "init"), Beam.toRegister (Beam.X 0) )
+      [ ( Beam.toSource (Text.pack "init"), Beam.toRegister (Beam.X 1) )
       ]
+  , I.test_heap 3 2
+  , I.put_tuple 2 (Beam.X 0)
+  , I.put ("ok" :: Text.Text)
+  , I.put (Beam.X 1)
   , I.deallocate 0
   , I.return'
   ]
@@ -36,7 +40,13 @@ handleCall main pre post =
       ]
   , I.move (Beam.Y 0) (Beam.X 0)
   , I.call_fun 1
-  , I.deallocate 0
+  , I.test_heap 4 1
+  , I.put_tuple 3 (Beam.X 1)
+  , I.put ("reply" :: Text.Text)
+  , I.put (Beam.X 0)
+  , I.put (Beam.X 0) -- TODO: separate out-message and state
+  , I.move (Beam.X 1) (Beam.X 0)
+  , I.deallocate 1
   , I.return'
   ]
 
