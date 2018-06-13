@@ -31,19 +31,21 @@ handleCall ({ i } as s) =
     if i >= 7 then
         { i = -7 }
     else if i == -1 then
-        { i = 1 }
+        { i = countdown 10 }
     else
         { s | i = i +++ 1 }
 
 
 
 -- MUTUALLY RECURSIVE
--- f x =
---     if x == 1 then
---         1
---     else
---         g (x - 1)
---
---
--- g y =
---     f (y + 1)
+
+
+countdown x =
+    if x == 1 then
+        1
+    else
+        countdownHelp (x - 1)
+
+
+countdownHelp x =
+    countdown x

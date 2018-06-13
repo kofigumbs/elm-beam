@@ -88,11 +88,17 @@ registerModule moduleName name arity =
 
 registerTopLevel :: ModuleName.Canonical -> String -> Int -> Gen Beam.Label
 registerTopLevel moduleName name arity =
-  do  label <- freshLabel
-      State.modify $ \env -> env
-        { _topLevels = Map.insert (moduleName, name) (label, arity) (_topLevels env)
-        }
-      return label
+  do  topLevels <- State.gets _topLevels
+      case Map.lookup (moduleName, name) topLevels of
+        Just (label, _) ->
+          return label
+
+        Nothing ->
+          do  label <- freshLabel
+              State.modify $ \env -> env
+                { _topLevels = Map.insert (moduleName, name) (label, arity) topLevels
+                }
+              return label
 
 
 registerArgument :: String -> Gen Beam.Op

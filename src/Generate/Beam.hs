@@ -29,13 +29,21 @@ generate (Module.Module moduleName _ info) =
   in
   Beam.encode "pine" Env.metadata
      $ Env.run moduleName $
-       do  mapM_ forwardDeclare defs
+       do  mapM_ (forwardDeclare moduleName) defs
            concat <$> mapM (fromDef moduleName) defs
 
 
-forwardDeclare :: Opt.Def -> Env.Gen ()
-forwardDeclare _ =
-  return ()
+forwardDeclare :: ModuleName.Canonical -> Opt.Def -> Env.Gen Beam.Label
+forwardDeclare moduleName def =
+  case def of
+    Opt.Def _ name (Opt.Function args _) ->
+      Env.registerTopLevel moduleName name (length args)
+
+    Opt.Def _ name _ ->
+      Env.registerTopLevel moduleName name 0
+
+    Opt.TailDef _ _ _ _ ->
+      error "TODO: tail definition"
 
 
 fromDef :: ModuleName.Canonical -> Opt.Def -> Env.Gen [Beam.Op]
