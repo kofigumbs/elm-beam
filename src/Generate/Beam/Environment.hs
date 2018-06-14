@@ -1,12 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Generate.Beam.Environment
   ( run, metadata, Gen
-  , Value(..), Reference(..)
+  , Value(..)
   , freshLabel
   , freshStackAllocation, getStackAllocations, resetStackAllocation
-  , getTopLevel, registerTopLevel, registerArgument, registerLocal
+  , registerTopLevel, getTopLevel
+  , registerArgument, registerLocal, getLocal
   , returnRegister, cannotFail
-  , withReference
   ) where
 
 import qualified Codec.Beam as Beam
@@ -25,20 +25,17 @@ run moduleName moduleOps =
   let
     evaluate =
       flip State.evalState $ Env 1 0 Map.empty Map.empty
-
-    main =
-      Var.Canonical (Var.TopLevel moduleName) "main"
   in
   evaluate $ concatM
     [ BuiltIn.server
         <$> freshLabel
         <*> registerExternal (ModuleName.inCore ["Platform"]) "server" 1
     , moduleOps
-    , withReference main $ \(TopLevel label _) ->
-        concatM
-          [ BuiltIn.init label <$> freshLabel <*> freshLabel
-          , BuiltIn.handleCall label <$> freshLabel <*> freshLabel
-          ]
+    , do  ( main, _ ) <- getTopLevel moduleName "main"
+          concatM
+            [ BuiltIn.init main <$> freshLabel <*> freshLabel
+            , BuiltIn.handleCall main <$> freshLabel <*> freshLabel
+            ]
     ]
 
 
@@ -110,6 +107,14 @@ registerArgument name =
 
 registerLocal :: String -> Gen Beam.Y
 registerLocal name =
+  do  maybeVar <- Map.lookup name <$> State.gets _locals
+      case maybeVar of
+        Just info -> return info
+        Nothing   -> error $ "LOCAL VARIABLE `" ++ name ++ "` is unbound"
+
+
+getLocal :: String -> Gen Beam.Y
+getLocal name =
   do  y <- freshStackAllocation
       State.modify $ \env -> env { _locals = Map.insert name y (_locals env) }
       return y
@@ -140,37 +145,6 @@ resetStackAllocation =
 getStackAllocations :: Gen Int
 getStackAllocations =
   State.gets _nextStackAllocation
-
-
-
--- GENERIC REFERENCES
-
-
-data Reference
-  = Local Beam.Y
-  | TopLevel Beam.Label Int
-
-
-withReference :: Var.Canonical -> (Reference -> Gen a) -> Gen a
-withReference variable f =
-  case Var.home variable of
-    Var.BuiltIn    -> notFound
-    Var.Module m   -> f =<< inModule m
-    Var.TopLevel m -> f =<< inModule m
-    Var.Local      -> f =<< local
-
-  where
-    notFound =
-      error $ "VARIABLE `" ++ Var.name variable ++ "` is unbound"
-
-    local =
-      maybe notFound Local <$>
-        Map.lookup (Var.name variable) <$> State.gets _locals
-
-    inModule :: ModuleName.Canonical -> Gen Reference
-    inModule name =
-      maybe notFound (uncurry TopLevel) <$>
-        Map.lookup (name, Var.name variable) <$> State.gets _topLevels
 
 
 

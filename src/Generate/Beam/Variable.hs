@@ -72,19 +72,30 @@ namespace (ModuleName.Canonical package name) var =
 
 standalone :: Var.Canonical -> Env.Gen Env.Value
 standalone variable =
-  Env.withReference variable referTo
+  case Var.home variable of
+    Var.BuiltIn    -> error "TODO"
+    Var.Module m   -> referToTopLevel =<< Env.getTopLevel m (Var.name variable)
+    Var.TopLevel m -> referToTopLevel =<< Env.getTopLevel m (Var.name variable)
+    Var.Local      -> referToLocal =<< Env.getLocal (Var.name variable)
 
 
 explicitCall :: Var.Canonical -> [ Env.Value ] -> Env.Gen Env.Value
 explicitCall variable args =
-  Env.withReference variable $ \reference ->
-    case reference of
-      Env.TopLevel label arity | arity == length args ->
-        call (asFunction label) [] args
+  case Var.home variable of
+    Var.BuiltIn    -> error "TODO"
+    Var.Module m   -> tryExhaustiveCall m
+    Var.TopLevel m -> tryExhaustiveCall m
+    Var.Local      -> standaloneCall
+  where
+    tryExhaustiveCall moduleName =
+      do  ( label, arity ) <- Env.getTopLevel moduleName (Var.name variable)
+          if arity == length args
+            then call (asFunction label) [] args
+            else standaloneCall
 
-      _ ->
-        do  Env.Value ops result <- referTo reference
-            call (asLambda result) ops args
+    standaloneCall =
+      do  Env.Value ops result <- standalone variable
+          call (asLambda result) ops args
 
 
 genericCall :: Env.Value -> [ Env.Value ] -> Env.Gen Env.Value
@@ -116,21 +127,21 @@ asFunction label arity =
   [ I.call arity label ]
 
 
-referTo :: Env.Reference -> Env.Gen Env.Value
-referTo reference =
-  case reference of
-    Env.Local y ->
-      return $ Env.Value [] (Beam.toSource y)
+referToTopLevel :: ( Beam.Label, Int ) -> Env.Gen Env.Value
+referToTopLevel ( label, arity ) =
+  do  dest <- Env.freshStackAllocation
+      return $ Env.Value
+        [ if arity == 0
+             then I.call 0 label
+             else I.make_fun2 $ Beam.Lambda (lambdaName label) arity label 0
+        , I.move Env.returnRegister dest
+        ]
+        (Beam.toSource dest)
 
-    Env.TopLevel label arity ->
-      do  dest <- Env.freshStackAllocation
-          return $ Env.Value
-            [ if arity == 0
-                 then I.call 0 label
-                 else I.make_fun2 $ Beam.Lambda (lambdaName label) arity label 0
-            , I.move Env.returnRegister dest
-            ]
-            (Beam.toSource dest)
+
+referToLocal :: Beam.Y -> Env.Gen Env.Value
+referToLocal y =
+  return $ Env.Value [] (Beam.toSource y)
 
 
 lambdaName :: Beam.Label -> Text.Text
