@@ -27,58 +27,20 @@ generate (Module.Module moduleName _ info) =
   let
     defs = Module.program info
   in
-  Beam.encode "pine" Env.metadata
-     $ Env.run moduleName $
-       do  mapM_ (forwardDeclare moduleName) defs
-           concat <$> mapM (fromDef moduleName) defs
-
-
-forwardDeclare :: ModuleName.Canonical -> Opt.Def -> Env.Gen Beam.Label
-forwardDeclare moduleName def =
-  case def of
-    Opt.Def _ name (Opt.Function args _) ->
-      Env.registerTopLevel moduleName name (length args)
-
-    Opt.Def _ name _ ->
-      Env.registerTopLevel moduleName name 0
-
-    Opt.TailDef _ _ _ _ ->
-      error "TODO: tail definition"
+  Beam.encode "pine" Env.metadata $ Env.run moduleName $
+    do  mapM_ (BeamVar.declare moduleName) defs
+        concat <$> mapM (fromDef moduleName) defs
 
 
 fromDef :: ModuleName.Canonical -> Opt.Def -> Env.Gen [Beam.Op]
 fromDef moduleName def =
-  case def of
-    Opt.Def _ name (Opt.Function args expr) ->
-      fromBody moduleName (namespace moduleName) name args expr
-
-    Opt.Def _ name expr ->
-      fromBody moduleName (namespace moduleName) name [] expr
-
-    Opt.TailDef _ _ _ _ ->
-      error "TODO: tail definition"
-
-
-fromBody
-  :: ModuleName.Canonical
-  -> (String -> String)
-  -> String
-  -> [String]
-  -> Opt.Expr
-  -> Env.Gen [Beam.Op]
-fromBody moduleName prefix name args body =
-  do  Env.resetStackAllocation
-      pre <- Env.freshLabel
-      post <- Env.registerTopLevel moduleName name (length args)
+  do  (args, prelude, body) <- BeamVar.define moduleName def
       argOps <- mapM Env.registerArgument args
       Env.Value bodyOps result <- fromExpr body
       stackNeeded <- Env.getStackAllocations
       return $ concat
-        [ [ I.label pre
-          , I.func_info (Text.pack (prefix name)) (length args)
-          , I.label post
-          , I.allocate stackNeeded (length args)
-          ]
+        [ prelude
+        , [ I.allocate stackNeeded (length args) ]
         , argOps
         , bodyOps
         , [ I.move result Env.returnRegister
@@ -337,13 +299,6 @@ builtIn (Var.Canonical home _) =
 
     _ ->
       False
-
-
-namespace :: ModuleName.Canonical -> String -> String
-namespace (ModuleName.Canonical package name) var =
-  Package.toString package
-    ++ "/" ++ ModuleName.toString name
-    ++ "#" ++ var
 
 
 lazyBytes :: String -> LazyBytes.ByteString

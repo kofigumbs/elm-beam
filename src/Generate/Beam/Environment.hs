@@ -4,7 +4,7 @@ module Generate.Beam.Environment
   , Value(..), Reference(..)
   , freshLabel
   , freshStackAllocation, getStackAllocations, resetStackAllocation
-  , registerTopLevel, registerArgument, registerLocal
+  , getTopLevel, registerTopLevel, registerArgument, registerLocal
   , returnRegister, cannotFail
   , withReference
   ) where
@@ -32,7 +32,7 @@ run moduleName moduleOps =
   evaluate $ concatM
     [ BuiltIn.server
         <$> freshLabel
-        <*> registerModule (ModuleName.inCore ["Platform"]) "server" 1
+        <*> registerExternal (ModuleName.inCore ["Platform"]) "server" 1
     , moduleOps
     , withReference main $ \(TopLevel label _) ->
         concatM
@@ -77,8 +77,8 @@ data Value = Value
 -- MODIFY
 
 
-registerModule :: ModuleName.Canonical -> String -> Int -> Gen Beam.Label
-registerModule moduleName name arity =
+registerExternal :: ModuleName.Canonical -> String -> Int -> Gen Beam.Label
+registerExternal moduleName name arity =
   do  label <- freshLabel
       State.modify $ \env -> env
         { _topLevels = Map.insert (moduleName, name) (label, arity) (_topLevels env)
@@ -86,19 +86,20 @@ registerModule moduleName name arity =
       return label
 
 
-registerTopLevel :: ModuleName.Canonical -> String -> Int -> Gen Beam.Label
+registerTopLevel :: ModuleName.Canonical -> String -> Int -> Gen ()
 registerTopLevel moduleName name arity =
-  do  topLevels <- State.gets _topLevels
-      case Map.lookup (moduleName, name) topLevels of
-        Just (label, _) ->
-          return label
+  do  label <- freshLabel
+      State.modify $ \env -> env
+        { _topLevels = Map.insert (moduleName, name) (label, arity) (_topLevels env)
+        }
 
-        Nothing ->
-          do  label <- freshLabel
-              State.modify $ \env -> env
-                { _topLevels = Map.insert (moduleName, name) (label, arity) topLevels
-                }
-              return label
+
+getTopLevel :: ModuleName.Canonical -> String -> Gen ( Beam.Label, Int )
+getTopLevel moduleName name =
+  do  maybeVar <- Map.lookup (moduleName, name) <$> State.gets _topLevels
+      case maybeVar of
+        Just info -> return info
+        Nothing   -> error $ "TOP-LEVEL VARIABLE `" ++ name ++ "` is unbound"
 
 
 registerArgument :: String -> Gen Beam.Op
@@ -130,7 +131,10 @@ freshStackAllocation =
 
 resetStackAllocation :: Gen ()
 resetStackAllocation =
-  State.modify $ \env -> env { _nextStackAllocation = 0 }
+  State.modify $ \env -> env
+    { _nextStackAllocation = 0
+    , _locals = Map.empty
+    }
 
 
 getStackAllocations :: Gen Int

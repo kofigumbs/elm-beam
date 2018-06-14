@@ -1,13 +1,73 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Generate.Beam.Variable (standalone, explicitCall, genericCall) where
+module Generate.Beam.Variable
+  ( declare, define --, defineLocal
+  , standalone, explicitCall, genericCall
+  ) where
 
 import Data.Monoid ((<>))
 import qualified Codec.Beam as Beam
 import qualified Codec.Beam.Instructions as I
 import qualified Data.Text as Text
 
+import qualified AST.Expression.Optimized as Opt
+import qualified AST.Module.Name as ModuleName
 import qualified AST.Variable as Var
+import qualified Elm.Package as Package
 import qualified Generate.Beam.Environment as Env
+
+
+-- CREATE
+
+
+declare :: ModuleName.Canonical -> Opt.Def -> Env.Gen ()
+declare moduleName def =
+  case def of
+    Opt.Def _ name (Opt.Function args _) ->
+      Env.registerTopLevel moduleName name (length args)
+
+    Opt.Def _ name _ ->
+      Env.registerTopLevel moduleName name 0
+
+    Opt.TailDef _ _ _ _ ->
+      error "TODO: tail definition"
+
+
+define :: ModuleName.Canonical -> Opt.Def -> Env.Gen ([ String ], [ Beam.Op ], Opt.Expr)
+define moduleName def =
+  case def of
+    Opt.Def _ name (Opt.Function args expr) ->
+      defineTopLevel moduleName name args expr
+
+    Opt.Def _ name expr ->
+      defineTopLevel moduleName name [] expr
+
+    Opt.TailDef _ _ _ _ ->
+      error "TODO: tail definition"
+
+defineTopLevel :: ModuleName.Canonical -> String -> [ String ] -> Opt.Expr -> Env.Gen ([ String ], [ Beam.Op ], Opt.Expr)
+defineTopLevel moduleName name args body =
+  do  Env.resetStackAllocation
+      pre <- Env.freshLabel
+      ( post, _ ) <- Env.getTopLevel moduleName name
+      return
+        ( args
+        , [ I.label pre
+          , I.func_info (namespace moduleName name) (length args)
+          , I.label post
+          ]
+        , body
+        )
+
+
+namespace :: ModuleName.Canonical -> String -> Text.Text
+namespace (ModuleName.Canonical package name) var =
+  Text.pack $ Package.toString package
+    ++ "/" ++ ModuleName.toString name
+    ++ "#" ++ var
+
+
+
+-- USE
 
 
 standalone :: Var.Canonical -> Env.Gen Env.Value

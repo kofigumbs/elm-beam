@@ -14,15 +14,11 @@ io:format("~p", [beam_disasm:file(pine)]), x.
 
 
 
-# TODOs (very high level)
-
-### Semantics
+### TODOs (very high level)
 
  - currying / partial application / function references
  - don't allocate so much stack space
  - mutual recursion (call_last)
-
-### Architecture
 
  - Term.Encode/Decode module
  - Native <> NIF
