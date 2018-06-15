@@ -90,7 +90,7 @@ getDeps pkgName (Module.Header sourceTag name _ _ _ imports) =
 -- COMPILATION
 
 
-{-| Compiles Elm source code to JavaScript. -}
+{-| Compiles Elm source code to BEAM. -}
 compile
     :: Context
     -> String
