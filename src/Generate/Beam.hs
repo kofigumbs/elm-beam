@@ -211,15 +211,9 @@ fromRecord record fields =
 
 fromLet :: Opt.Def -> Env.Gen [ Beam.Op ]
 fromLet def =
-  case def of
-    Opt.Def _ name expr ->
-      do  Env.Value ops result <- fromExpr expr
-          dest <- Env.registerLocal name
-          return $ ops ++ [ I.move result dest ]
-          
-
-    Opt.TailDef _ _ _ _ ->
-      error "TODO: tail-recursive let"
+  do  (dest, expr) <- BeamVar.defineLocal def
+      Env.Value ops result <- fromExpr expr
+      return $ ops ++ [ I.move result dest ]
 
 
 fromDecider :: Opt.Decider Opt.Choice -> Env.Gen Env.Value

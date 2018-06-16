@@ -1,6 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Generate.Beam.Variable
-  ( declare, define --, defineLocal
+  ( declare, define, defineLocal
   , standalone, explicitCall, genericCall
   ) where
 
@@ -44,6 +44,7 @@ define moduleName def =
     Opt.TailDef _ _ _ _ ->
       error "TODO: tail definition"
 
+
 defineTopLevel :: ModuleName.Canonical -> String -> [ String ] -> Opt.Expr -> Env.Gen ([ String ], [ Beam.Op ], Opt.Expr)
 defineTopLevel moduleName name args body =
   do  Env.resetStackAllocation
@@ -57,6 +58,16 @@ defineTopLevel moduleName name args body =
           ]
         , body
         )
+
+
+defineLocal :: Opt.Def -> Env.Gen ( Beam.Y, Opt.Expr )
+defineLocal def =
+  case def of
+    Opt.Def _ name expr ->
+      (,) <$> Env.registerLocal name <*> return expr
+
+    Opt.TailDef _ _ _ _ ->
+      error "TODO: tail-recursive let"
 
 
 namespace :: ModuleName.Canonical -> String -> Text.Text
@@ -86,6 +97,7 @@ explicitCall variable args =
     Var.Module m   -> tryExhaustiveCall m
     Var.TopLevel m -> tryExhaustiveCall m
     Var.Local      -> standaloneCall
+
   where
     tryExhaustiveCall moduleName =
       do  ( label, arity ) <- Env.getTopLevel moduleName (Var.name variable)
