@@ -102,17 +102,17 @@ explicitCall variable args =
     tryExhaustiveCall moduleName =
       do  ( label, arity ) <- Env.getTopLevel moduleName (Var.name variable)
           if arity == length args
-            then call (asFunction label) [] args
+            then call (asQualified label) [] args
             else standaloneCall
 
     standaloneCall =
       do  Env.Value ops result <- standalone variable
-          call (asLambda result) ops args
+          call (asCurried result) ops args
 
 
 genericCall :: Env.Value -> [ Env.Value ] -> Env.Gen Env.Value
 genericCall (Env.Value ops result) =
-  call (asLambda result) ops
+  call (asCurried result) ops
 
 
 call :: (Int -> [ Beam.Op ]) -> [ Beam.Op ] -> [ Env.Value ] -> Env.Gen Env.Value
@@ -127,16 +127,6 @@ call callConv functionOps argValues =
             , [ I.move Env.returnRegister dest ]
             ]
       return $ Env.Value ops (Beam.toSource dest)
-
-
-asLambda :: Beam.Source -> Int -> [ Beam.Op ]
-asLambda fun arity =
-  [ I.move fun (Beam.X arity), I.call_fun arity ]
-
-
-asFunction :: Beam.Label -> Int -> [ Beam.Op ]
-asFunction label arity =
-  [ I.call arity label ]
 
 
 referToTopLevel :: ( Beam.Label, Int ) -> Env.Gen Env.Value
@@ -159,3 +149,17 @@ referToLocal y =
 lambdaName :: Beam.Label -> Text.Text
 lambdaName (Beam.Label i) =
   "__LAMBDA@" <> Text.pack (show i)
+
+
+
+-- DIFFERENT WAYS TO CALL A FUNCTION
+
+
+asQualified :: Beam.Label -> Int -> [ Beam.Op ]
+asQualified label arity =
+  [ I.call arity label ]
+
+
+asCurried :: Beam.Source -> Int -> [ Beam.Op ]
+asCurried fun arity =
+  [ I.move fun (Beam.X arity), I.call_fun arity ]
