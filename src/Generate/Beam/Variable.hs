@@ -49,15 +49,13 @@ defineTopLevel :: ModuleName.Canonical -> String -> [ String ] -> Opt.Expr -> En
 defineTopLevel moduleName name args body =
   do  Env.resetStackAllocation
       pre <- Env.freshLabel
-      ( post, _ ) <- Env.getTopLevel moduleName name
-      return
-        ( args
-        , [ I.label pre
-          , I.func_info (namespace moduleName name) (length args)
-          , I.label post
-          ]
-        , body
-        )
+      ( post, arity ) <- Env.getTopLevel moduleName name
+      let ops =
+            [ I.label pre
+            , I.func_info (namespace moduleName name) arity
+            , I.label post
+            ]
+      return ( args, ops, body )
 
 
 defineLocal :: Opt.Def -> Env.Gen ( Beam.Y, Opt.Expr )

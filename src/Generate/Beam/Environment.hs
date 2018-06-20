@@ -85,10 +85,8 @@ registerExternal moduleName name arity =
 
 registerTopLevel :: ModuleName.Canonical -> String -> Int -> Gen ()
 registerTopLevel moduleName name arity =
-  do  label <- freshLabel
-      State.modify $ \env -> env
-        { _topLevels = Map.insert (moduleName, name) (label, arity) (_topLevels env)
-        }
+  do  registerExternal moduleName name arity
+      return ()
 
 
 getTopLevel :: ModuleName.Canonical -> String -> Gen ( Beam.Label, Int )
@@ -107,17 +105,17 @@ registerArgument name =
 
 registerLocal :: String -> Gen Beam.Y
 registerLocal name =
-  do  maybeVar <- Map.lookup name <$> State.gets _locals
-      case maybeVar of
-        Just info -> return info
-        Nothing   -> error $ "LOCAL VARIABLE `" ++ name ++ "` is unbound"
+  do  y <- freshStackAllocation
+      State.modify $ \env -> env { _locals = Map.insert name y (_locals env) }
+      return y
 
 
 getLocal :: String -> Gen Beam.Y
 getLocal name =
-  do  y <- freshStackAllocation
-      State.modify $ \env -> env { _locals = Map.insert name y (_locals env) }
-      return y
+  do  maybeVar <- Map.lookup name <$> State.gets _locals
+      case maybeVar of
+        Just info -> return info
+        Nothing   -> error $ "LOCAL VARIABLE `" ++ name ++ "` is unbound"
 
 
 freshLabel :: Gen Beam.Label
