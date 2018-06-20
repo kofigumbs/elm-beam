@@ -5,7 +5,6 @@ module Generate.Beam.Variable
   , standalone, explicitCall, genericCall
   ) where
 
-import Control.Monad (unless)
 import Data.Monoid ((<>))
 import qualified Codec.Beam as Beam
 import qualified Codec.Beam.Instructions as I
@@ -26,7 +25,7 @@ declare :: ModuleName.Canonical -> Opt.Def -> Env.Gen ()
 declare moduleName def =
   case def of
     Opt.Def _ name (Opt.Function args _) ->
-      do  Env.freshLabel {- reserve label for curried version -}
+      do  Env.freshLabel {- reserve label for currying -}
           Env.registerTopLevel moduleName name (length args)
 
     Opt.Def _ name _ ->
@@ -70,7 +69,7 @@ topLevelOps :: ModuleName.Canonical -> String -> Env.Gen [ Beam.Op ]
 topLevelOps moduleName name =
   do  Env.resetStackAllocation
       pre <- Env.freshLabel
-      ( post, arity ) <- Env.getTopLevel moduleName name
+      ( post@(Beam.Label i), arity ) <- Env.getTopLevel moduleName name
       let ops =
             [ I.label pre
             , I.func_info function arity
@@ -78,42 +77,10 @@ topLevelOps moduleName name =
             ]
       if Help.isOp name || arity <= 1
          then return ops
-         else curriedOps post function arity ops
+         else curriedOps function (Ctx post arity) (Ctx (Beam.Label (i - 1)) 1) ops
   where
     function = namespace moduleName name
 
-
-curriedOps :: Beam.Label -> Text.Text -> Int -> [ Beam.Op ] -> Env.Gen [ Beam.Op ]
-curriedOps original@(Beam.Label i) name arity acc =
-  do  unless (arity == 2) (error "TODO: curried > 2")
-      pre <- Env.freshLabel
-      let post = Beam.Label (i - 1)
-      nextPre <- Env.freshLabel
-      nextPost <- Env.freshLabel
-      return $
-        I.label pre
-          : I.func_info ("_" <> name) 1
-          : I.label post
-          : I.make_fun2 (Beam.Lambda
-              { Beam._lambda_name = "__" <> name
-              , Beam._lambda_arity = 1
-              , Beam._lambda_label = nextPost
-              , Beam._lambda_free = 1
-              })
-          : I.return'
-
-          : I.label nextPre
-          : I.func_info ("__" <> name) 2
-          : I.label nextPost
-
-          -- reverse arguments
-          : I.move (Beam.X 1) (Beam.X 2)
-          : I.move (Beam.X 0) (Beam.X 1)
-          : I.move (Beam.X 2) (Beam.X 0)
-
-          : I.call_only 2 original
-          : I.return'
-          : acc
 
 
 namespace :: ModuleName.Canonical -> String -> Text.Text
@@ -121,6 +88,71 @@ namespace (ModuleName.Canonical package name) var =
   Text.pack $ Package.toString package
     ++ "/" ++ ModuleName.toString name
     ++ "#" ++ var
+
+
+
+-- SETUP CURRYING
+
+
+data Ctx = Ctx
+  { _ctx_label :: Beam.Label
+  , _ctx_arity :: Int
+  }
+
+
+curriedOps :: Text.Text -> Ctx -> Ctx -> [ Beam.Op ] -> Env.Gen [ Beam.Op ]
+curriedOps name original current acc =
+  if _ctx_arity original == _ctx_arity current then
+    do  pre <- Env.freshLabel
+        return $ concat
+          [ [ I.label pre
+            , I.func_info (lambdaName current name) (_ctx_arity original)
+            , I.label (_ctx_label current)
+            ]
+          , reverseXs original
+          , [ I.call_only (_ctx_arity original) (_ctx_label original)
+            , I.return'
+            ]
+          , acc
+          ]
+    
+  else
+    do  pre <- Env.freshLabel
+        next <- Ctx <$> Env.freshLabel <*> return (_ctx_arity current + 1)
+        curriedOps name original next $
+          I.label pre
+            : I.func_info (lambdaName current name) (_ctx_arity current)
+            : I.label (_ctx_label current)
+            : I.make_fun2 (Beam.Lambda
+                { Beam._lambda_name = lambdaName next name
+                , Beam._lambda_arity = 1
+                , Beam._lambda_label = _ctx_label next
+                , Beam._lambda_free = _ctx_arity current
+                })
+            : I.return'
+            : acc
+
+
+reverseXs :: Ctx -> [ Beam.Op ]
+reverseXs (Ctx _ arity) =
+  reverseXsHelp (Beam.X arity) 0 (arity - 1) []
+
+
+reverseXsHelp :: Beam.X -> Int -> Int -> [ Beam.Op ] -> [ Beam.Op ]
+reverseXsHelp tmp start end acc =
+  if end - start <= 0 then
+    acc
+  else
+    reverseXsHelp tmp (start + 1) (end - 1) $
+      I.move (Beam.X end) tmp
+        : I.move (Beam.X start) (Beam.X end)
+        : I.move tmp (Beam.X start)
+        : acc
+
+
+lambdaName :: Ctx -> Text.Text -> Text.Text
+lambdaName (Ctx _ arity) baseName =
+  Text.replicate arity "_" <> baseName
 
 
 
