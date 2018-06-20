@@ -34,7 +34,7 @@ generate (Module.Module moduleName _ info) =
 
 fromDef :: ModuleName.Canonical -> Opt.Def -> Env.Gen [Beam.Op]
 fromDef moduleName def =
-  do  (args, prelude, body) <- BeamVar.define moduleName def
+  do  BeamVar.Def args body prelude <- BeamVar.define moduleName def
       argOps <- mapM Env.registerArgument args
       Env.Value bodyOps result <- fromExpr body
       stackNeeded <- Env.getStackAllocations

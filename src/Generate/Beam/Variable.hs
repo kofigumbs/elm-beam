@@ -1,9 +1,11 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Generate.Beam.Variable
-  ( declare, define, defineLocal
+  ( Def(..)
+  , declare, define, defineLocal
   , standalone, explicitCall, genericCall
   ) where
 
+import Control.Monad (unless)
 import Data.Monoid ((<>))
 import qualified Codec.Beam as Beam
 import qualified Codec.Beam.Instructions as I
@@ -34,30 +36,24 @@ declare moduleName def =
       error "TODO: tail definition"
 
 
-define :: ModuleName.Canonical -> Opt.Def -> Env.Gen ([ String ], [ Beam.Op ], Opt.Expr)
+data Def = Def
+  { _def_args :: [ String ]
+  , _def_body :: Opt.Expr
+  , _def_ops :: [Beam.Op]
+  }
+
+
+define :: ModuleName.Canonical -> Opt.Def -> Env.Gen Def
 define moduleName def =
   case def of
     Opt.Def _ name (Opt.Function args expr) ->
-      defineTopLevel moduleName name args expr
+      Def args expr <$> topLevelOps moduleName name
 
     Opt.Def _ name expr ->
-      defineTopLevel moduleName name [] expr
+      Def [] expr<$> topLevelOps moduleName name
 
     Opt.TailDef _ _ _ _ ->
       error "TODO: tail definition"
-
-
-defineTopLevel :: ModuleName.Canonical -> String -> [ String ] -> Opt.Expr -> Env.Gen ([ String ], [ Beam.Op ], Opt.Expr)
-defineTopLevel moduleName name args body =
-  do  Env.resetStackAllocation
-      pre <- Env.freshLabel
-      ( post, arity ) <- Env.getTopLevel moduleName name
-      ops <- withCurriedVersion post moduleName name arity
-        [ I.label pre
-        , I.func_info (namespace moduleName name) arity
-        , I.label post
-        ]
-      return ( args, ops, body )
 
 
 defineLocal :: Opt.Def -> Env.Gen ( Beam.Y, Opt.Expr )
@@ -70,42 +66,54 @@ defineLocal def =
       error "TODO: tail-recursive let"
 
 
-withCurriedVersion :: Beam.Label -> ModuleName.Canonical -> String -> Int -> [ Beam.Op ] -> Env.Gen [ Beam.Op ]
-withCurriedVersion original@(Beam.Label i) moduleName name arity ops =
-  if Help.isOp name || arity <= 1 then
-    return ops
-  else if arity == 2 then
-    do  let baseName = namespace moduleName name
-        pre <- Env.freshLabel
-        let post = Beam.Label (i - 1)
-        nextPre <- Env.freshLabel
-        nextPost <- Env.freshLabel
-        return $
-          I.label pre
-            : I.func_info ("_" <> baseName) 1
-            : I.label post
-            : I.make_fun2 (Beam.Lambda
-                { Beam._lambda_name = "__" <> baseName
-                , Beam._lambda_arity = 1
-                , Beam._lambda_label = nextPost
-                , Beam._lambda_free = 1
-                })
-            : I.return'
+topLevelOps :: ModuleName.Canonical -> String -> Env.Gen [ Beam.Op ]
+topLevelOps moduleName name =
+  do  Env.resetStackAllocation
+      pre <- Env.freshLabel
+      ( post, arity ) <- Env.getTopLevel moduleName name
+      let ops =
+            [ I.label pre
+            , I.func_info function arity
+            , I.label post
+            ]
+      if Help.isOp name || arity <= 1
+         then return ops
+         else curriedOps post function arity ops
+  where
+    function = namespace moduleName name
 
-            : I.label nextPre
-            : I.func_info ("__" <> baseName) 2
-            : I.label nextPost
 
-            -- reverse arguments
-            : I.move (Beam.X 1) (Beam.X 2)
-            : I.move (Beam.X 0) (Beam.X 1)
-            : I.move (Beam.X 2) (Beam.X 0)
+curriedOps :: Beam.Label -> Text.Text -> Int -> [ Beam.Op ] -> Env.Gen [ Beam.Op ]
+curriedOps original@(Beam.Label i) name arity acc =
+  do  unless (arity == 2) (error "TODO: curried > 2")
+      pre <- Env.freshLabel
+      let post = Beam.Label (i - 1)
+      nextPre <- Env.freshLabel
+      nextPost <- Env.freshLabel
+      return $
+        I.label pre
+          : I.func_info ("_" <> name) 1
+          : I.label post
+          : I.make_fun2 (Beam.Lambda
+              { Beam._lambda_name = "__" <> name
+              , Beam._lambda_arity = 1
+              , Beam._lambda_label = nextPost
+              , Beam._lambda_free = 1
+              })
+          : I.return'
 
-            : I.call_only 2 original
-            : I.return'
-            : ops
-  else
-    error "TODO: curried > 2"
+          : I.label nextPre
+          : I.func_info ("__" <> name) 2
+          : I.label nextPost
+
+          -- reverse arguments
+          : I.move (Beam.X 1) (Beam.X 2)
+          : I.move (Beam.X 0) (Beam.X 1)
+          : I.move (Beam.X 2) (Beam.X 0)
+
+          : I.call_only 2 original
+          : I.return'
+          : acc
 
 
 namespace :: ModuleName.Canonical -> String -> Text.Text
@@ -132,13 +140,13 @@ explicitCall :: Var.Canonical -> [ Env.Value ] -> Env.Gen Env.Value
 explicitCall (Var.Canonical home name) args =
   case home of
     Var.BuiltIn             -> error "TODO"
-    Var.Module moduleName   -> tryExhaustiveCall moduleName name args
-    Var.TopLevel moduleName -> tryExhaustiveCall moduleName name args
+    Var.Module moduleName   -> tryExactCall moduleName name args
+    Var.TopLevel moduleName -> tryExactCall moduleName name args
     Var.Local               -> referToLocal name
 
 
-tryExhaustiveCall :: ModuleName.Canonical -> String -> [ Env.Value ] -> Env.Gen Env.Value
-tryExhaustiveCall moduleName name args =
+tryExactCall :: ModuleName.Canonical -> String -> [ Env.Value ] -> Env.Gen Env.Value
+tryExactCall moduleName name args =
   do  ( label, arity ) <- Env.getTopLevel moduleName name
       if arity == length args
         then call [] $ qualified label args
@@ -180,7 +188,7 @@ referByArity moduleName name label@(Beam.Label i) arity =
 
     1 ->
       I.make_fun2 $ Beam.Lambda
-        { Beam._lambda_name = "__REF@" <> namespace moduleName name
+        { Beam._lambda_name = "_REF@" <> namespace moduleName name
         , Beam._lambda_arity = 1
         , Beam._lambda_label = label
         , Beam._lambda_free = 0
