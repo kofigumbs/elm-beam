@@ -16,7 +16,7 @@ io:format("~p", [beam_disasm:file(pine)]), x.
 
 ### TODOs (very high level)
 
- - currying / partial application / function references
+ - lambda lifting
  - don't allocate so much stack space
  - mutual recursion (call_last)
 
