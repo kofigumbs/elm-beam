@@ -25,14 +25,23 @@ declare :: ModuleName.Canonical -> Opt.Def -> Env.Gen ()
 declare moduleName def =
   case def of
     Opt.Def _ name (Opt.Function args _) ->
-      do  Env.freshLabel {- reserve label for currying -}
-          Env.registerTopLevel moduleName name (length args)
+      do  let arity = length args
+          reserveCurriedLabel name arity
+          Env.registerTopLevel moduleName name arity
 
     Opt.Def _ name _ ->
       Env.registerTopLevel moduleName name 0
 
     Opt.TailDef _ _ _ _ ->
       error "TODO: tail definition"
+
+
+reserveCurriedLabel :: String -> Int -> Env.Gen ()
+reserveCurriedLabel name arity =
+  if alwaysExplicit name arity then
+    return ()
+  else
+    Env.freshLabel >> return ()
 
 
 data Def = Def
@@ -69,18 +78,22 @@ topLevelOps :: ModuleName.Canonical -> String -> Env.Gen [ Beam.Op ]
 topLevelOps moduleName name =
   do  Env.resetStackAllocation
       pre <- Env.freshLabel
-      ( post@(Beam.Label i), arity ) <- Env.getTopLevel moduleName name
+      ( post, arity ) <- Env.getTopLevel moduleName name
       let ops =
             [ I.label pre
             , I.func_info function arity
             , I.label post
             ]
-      if Help.isOp name || arity <= 1
+      if alwaysExplicit name arity
          then return ops
-         else curriedOps function (Ctx post arity) (Ctx (Beam.Label (i - 1)) 1) ops
+         else curriedOps function (Ctx post arity) (Ctx (curriedOffset post) 1) ops
   where
     function = namespace moduleName name
 
+
+alwaysExplicit :: String -> Int -> Bool
+alwaysExplicit name arity =
+  Help.isOp name || arity <= 1
 
 
 namespace :: ModuleName.Canonical -> String -> Text.Text
@@ -88,6 +101,11 @@ namespace (ModuleName.Canonical package name) var =
   Text.pack $ Package.toString package
     ++ "/" ++ ModuleName.toString name
     ++ "#" ++ var
+
+
+curriedOffset :: Beam.Label -> Beam.Label
+curriedOffset (Beam.Label i) =
+  Beam.Label (i - 1)
 
 
 
@@ -213,7 +231,7 @@ referToTopLevel moduleName name =
 
 
 referByArity :: ModuleName.Canonical -> String -> Beam.Label -> Int -> Beam.Op
-referByArity moduleName name label@(Beam.Label i) arity =
+referByArity moduleName name label arity =
   case arity of
     0 ->
       I.call 0 label
@@ -230,7 +248,7 @@ referByArity moduleName name label@(Beam.Label i) arity =
       I.make_fun2 $ Beam.Lambda
         { Beam._lambda_name = "__REF@" <> namespace moduleName name
         , Beam._lambda_arity = 1
-        , Beam._lambda_label = Beam.Label (i - 1)
+        , Beam._lambda_label = curriedOffset label
         , Beam._lambda_free = 0
         }
 
