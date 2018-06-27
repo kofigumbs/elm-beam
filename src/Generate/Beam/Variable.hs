@@ -83,9 +83,9 @@ topLevelOps moduleName name =
       ( post, arity ) <- Env.getTopLevel moduleName name
       prefix <-
         if alwaysExplicit name arity then
-          curriedOps function (Ctx post arity) (Ctx (curriedOffset post) 1)
-        else
           return Bag.empty
+        else
+          curriedOps function (Ctx post arity) (Ctx (curriedOffset post) 1)
       return $ Bag.append prefix $ Bag.fromList
         [ I.label pre
         , I.func_info function arity
