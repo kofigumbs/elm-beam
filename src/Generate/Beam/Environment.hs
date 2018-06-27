@@ -15,28 +15,50 @@ import qualified Control.Monad.State as State
 import qualified Data.Map as Map
 import qualified Data.Text as Text
 
+import Reporting.Bag (Bag)
 import qualified AST.Module.Name as ModuleName
 import qualified AST.Variable as Var
 import qualified Generate.Beam.BuiltIn as BuiltIn
+import qualified Reporting.Bag as Bag
 
 
-run :: ModuleName.Canonical -> Gen [ Beam.Op ] -> [ Beam.Op ]
+-- STATE
+
+
+type Gen a =
+  State.State Env a
+
+
+data Env = Env
+  { _nextLabel :: Int
+  , _nextStackAllocation :: Int
+  , _topLevels :: Map.Map (ModuleName.Canonical, String) (Beam.Label, Int)
+  , _locals :: Map.Map String Beam.Y
+  }
+
+
+run :: ModuleName.Canonical -> Gen (Bag Beam.Op) -> [ Beam.Op ]
 run moduleName moduleOps =
-  let
-    evaluate =
-      flip State.evalState $ Env 1 0 Map.empty Map.empty
-  in
-  evaluate $ concatM
+  Bag.toList id $ evaluate $ concatBagsM
     [ BuiltIn.server
         <$> freshLabel
         <*> registerExternal (ModuleName.inCore ["Platform"]) "server" 1
     , moduleOps
     , do  ( main, _ ) <- getTopLevel moduleName "main"
-          concatM
-            [ BuiltIn.init main <$> freshLabel <*> freshLabel
-            , BuiltIn.handleCall main <$> freshLabel <*> freshLabel
-            ]
+          Bag.append
+            <$> (BuiltIn.init main <$> freshLabel <*> freshLabel)
+            <*> (BuiltIn.handleCall main <$> freshLabel <*> freshLabel)
     ]
+
+
+evaluate :: Gen a -> a
+evaluate thunk =
+  State.evalState thunk (Env 1 0 Map.empty Map.empty)
+
+
+concatBagsM :: Monad m => [ m (Bag a) ] -> m (Bag a)
+concatBagsM []     = return Bag.empty
+concatBagsM (m:ms) = Bag.append <$> m <*> concatBagsM ms
 
 
 metadata :: [ Beam.Metadata ]
@@ -52,26 +74,14 @@ metadata =
   ]
 
 
-type Gen a =
-  State.State Env a
 
-
-data Env = Env
-  { _nextLabel :: Int
-  , _nextStackAllocation :: Int
-  , _topLevels :: Map.Map (ModuleName.Canonical, String) (Beam.Label, Int)
-  , _locals :: Map.Map String Beam.Y
-  }
+-- MODIFY
 
 
 data Value = Value
-  { ops :: [Beam.Op]
+  { ops :: Bag Beam.Op
   , result :: Beam.Source
   }
-
-
-
--- MODIFY
 
 
 registerExternal :: ModuleName.Canonical -> String -> Int -> Gen Beam.Label
@@ -157,8 +167,3 @@ returnRegister =
 cannotFail :: Beam.Label
 cannotFail =
   Beam.Label 0
-
-
-concatM :: Monad m => [ m [ a ] ] -> m [ a ]
-concatM [] = return []
-concatM (m:ms) = (++) <$> m <*> concatM ms

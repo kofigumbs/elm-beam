@@ -10,12 +10,14 @@ import qualified Codec.Beam as Beam
 import qualified Codec.Beam.Instructions as I
 import qualified Data.Text as Text
 
+import Reporting.Bag (Bag)
 import qualified AST.Expression.Optimized as Opt
 import qualified AST.Helpers as Help
 import qualified AST.Module.Name as ModuleName
 import qualified AST.Variable as Var
 import qualified Elm.Package as Package
 import qualified Generate.Beam.Environment as Env
+import qualified Reporting.Bag as Bag
 
 
 -- CREATE
@@ -47,7 +49,7 @@ reserveCurriedLabel name arity =
 data Def = Def
   { _def_args :: [ String ]
   , _def_body :: Opt.Expr
-  , _def_ops :: [Beam.Op]
+  , _def_ops :: Bag Beam.Op
   }
 
 
@@ -58,7 +60,7 @@ define moduleName def =
       Def args expr <$> topLevelOps moduleName name
 
     Opt.Def _ name expr ->
-      Def [] expr<$> topLevelOps moduleName name
+      Def [] expr <$> topLevelOps moduleName name
 
     Opt.TailDef _ _ _ _ ->
       error "TODO: tail definition"
@@ -74,19 +76,21 @@ defineLocal def =
       error "TODO: tail-recursive let"
 
 
-topLevelOps :: ModuleName.Canonical -> String -> Env.Gen [ Beam.Op ]
+topLevelOps :: ModuleName.Canonical -> String -> Env.Gen (Bag Beam.Op)
 topLevelOps moduleName name =
   do  Env.resetStackAllocation
       pre <- Env.freshLabel
       ( post, arity ) <- Env.getTopLevel moduleName name
-      let ops =
-            [ I.label pre
-            , I.func_info function arity
-            , I.label post
-            ]
-      if alwaysExplicit name arity
-         then return ops
-         else curriedOps function (Ctx post arity) (Ctx (curriedOffset post) 1) ops
+      prefix <-
+        if alwaysExplicit name arity then
+          curriedOps function (Ctx post arity) (Ctx (curriedOffset post) 1)
+        else
+          return Bag.empty
+      return $ Bag.append prefix $ Bag.fromList
+        [ I.label pre
+        , I.func_info function arity
+        , I.label post
+        ]
   where
     function = namespace moduleName name
 
@@ -118,54 +122,57 @@ data Ctx = Ctx
   }
 
 
-curriedOps :: Text.Text -> Ctx -> Ctx -> [ Beam.Op ] -> Env.Gen [ Beam.Op ]
-curriedOps name original current acc =
+curriedOps :: Text.Text -> Ctx -> Ctx -> Env.Gen (Bag Beam.Op)
+curriedOps name original current =
   if _ctx_arity original == _ctx_arity current then
     do  pre <- Env.freshLabel
-        return $ concat
-          [ [ I.label pre
+        return $ appendBags3
+          (Bag.fromList
+            [ I.label pre
             , I.func_info (lambdaName current name) (_ctx_arity original)
             , I.label (_ctx_label current)
-            ]
-          , reverseXs original
-          , [ I.call_only (_ctx_arity original) (_ctx_label original)
+            ])
+          (reverseXs original)
+          (Bag.fromList
+            [ I.call_only (_ctx_arity original) (_ctx_label original)
             , I.return'
-            ]
-          , acc
-          ]
-    
+            ])
   else
     do  pre <- Env.freshLabel
         next <- Ctx <$> Env.freshLabel <*> return (_ctx_arity current + 1)
-        curriedOps name original next $
-          I.label pre
-            : I.func_info (lambdaName current name) (_ctx_arity current)
-            : I.label (_ctx_label current)
-            : I.make_fun2 (Beam.Lambda
+        Bag.append
+          (Bag.fromList
+            [ I.label pre
+            , I.func_info (lambdaName current name) (_ctx_arity current)
+            , I.label (_ctx_label current)
+            , I.make_fun2 (Beam.Lambda
                 { Beam._lambda_name = lambdaName next name
                 , Beam._lambda_arity = 1
                 , Beam._lambda_label = _ctx_label next
                 , Beam._lambda_free = _ctx_arity current
                 })
-            : I.return'
-            : acc
+            , I.return'
+            ])
+          <$> curriedOps name original next
 
 
-reverseXs :: Ctx -> [ Beam.Op ]
+reverseXs :: Ctx -> Bag Beam.Op
 reverseXs (Ctx _ arity) =
-  reverseXsHelp (Beam.X arity) 0 (arity - 1) []
+  reverseXsHelp (Beam.X arity) 0 (arity - 1)
 
 
-reverseXsHelp :: Beam.X -> Int -> Int -> [ Beam.Op ] -> [ Beam.Op ]
-reverseXsHelp tmp start end acc =
+reverseXsHelp :: Beam.X -> Int -> Int -> Bag Beam.Op
+reverseXsHelp tmp start end =
   if end - start <= 0 then
-    acc
+    Bag.empty
   else
-    reverseXsHelp tmp (start + 1) (end - 1) $
-      I.move (Beam.X end) tmp
-        : I.move (Beam.X start) (Beam.X end)
-        : I.move tmp (Beam.X start)
-        : acc
+    Bag.append
+      (Bag.fromList
+        [ I.move (Beam.X end) tmp
+        , I.move (Beam.X start) (Beam.X end)
+        , I.move tmp (Beam.X start)
+        ])
+      (reverseXsHelp tmp (start + 1) (end - 1))
 
 
 lambdaName :: Ctx -> Text.Text -> Text.Text
@@ -199,7 +206,7 @@ tryExactCall :: ModuleName.Canonical -> String -> [ Env.Value ] -> Env.Gen Env.V
 tryExactCall moduleName name args =
   do  ( label, arity ) <- Env.getTopLevel moduleName name
       if arity == length args
-        then call [] $ qualified label args
+        then call Bag.empty $ qualified label args
         else flip genericCall args =<< referToTopLevel moduleName name
 
 
@@ -208,14 +215,11 @@ genericCall (Env.Value ops result) args =
   call ops $ curried result args
 
 
-call :: [ Beam.Op ] -> [ Beam.Op ] -> Env.Gen Env.Value
+call :: Bag Beam.Op -> Bag Beam.Op -> Env.Gen Env.Value
 call functionOps callOps =
   do  dest <- Env.freshStackAllocation
-      let ops = concat
-            [ functionOps
-            , callOps
-            , [ I.move Env.returnRegister dest ]
-            ]
+      let move = Bag.singleton (I.move Env.returnRegister dest)
+          ops  = appendBags3 functionOps callOps move
       return $ Env.Value ops (Beam.toSource dest)
 
 
@@ -224,9 +228,10 @@ referToTopLevel moduleName name =
   do  ( label@(Beam.Label i), arity ) <- Env.getTopLevel moduleName name
       dest <- Env.freshStackAllocation
       return $ Env.Value
-        [ referByArity moduleName name label arity
-        , I.move Env.returnRegister dest
-        ]
+        (Bag.fromList
+          [ referByArity moduleName name label arity
+          , I.move Env.returnRegister dest
+          ])
         (Beam.toSource dest)
 
 
@@ -255,18 +260,20 @@ referByArity moduleName name label arity =
 
 referToLocal :: String -> Env.Gen Env.Value
 referToLocal name =
-  Env.Value [] . Beam.toSource <$> Env.getLocal name
+  Env.Value Bag.empty . Beam.toSource <$> Env.getLocal name
 
 
 
 -- DIFFERENT WAYS TO CALL A FUNCTION
 
 
-qualified :: Beam.Label -> [ Env.Value ] -> [ Beam.Op ]
+qualified :: Beam.Label -> [ Env.Value ] -> Bag Beam.Op
 qualified label argValues =
-  concatMap Env.ops argValues
-    ++ zipWith moveArg argValues [0..]
-    ++ [ I.call (length argValues) label ]
+  concatBags id
+    [ concatBags Env.ops argValues
+    , Bag.fromList (zipWith moveArg argValues [0..])
+    , Bag.singleton (I.call (length argValues) label)
+    ]
 
 
 moveArg :: Env.Value -> Int -> Beam.Op
@@ -274,21 +281,32 @@ moveArg value i =
   I.move (Env.result value) (Beam.X i)
 
 
-curried :: Beam.Source -> [ Env.Value ] -> [ Beam.Op ]
+curried :: Beam.Source -> [ Env.Value ] -> Bag Beam.Op
 curried fun argValues =
-  concatMap Env.ops argValues
-    ++ curriedRevHelp fun argValues []
+  Bag.append (concatBags Env.ops argValues) (curriedHelp fun argValues)
 
 
-curriedRevHelp :: Beam.IsSource s => s -> [ Env.Value ] -> [ Beam.Op ] -> [ Beam.Op ]
-curriedRevHelp fun argValues acc =
+curriedHelp :: Beam.IsSource s => s -> [ Env.Value ] -> Bag Beam.Op
+curriedHelp fun argValues =
   case argValues of
     [] ->
-      reverse acc
+      Bag.empty
 
     Env.Value _ arg : rest ->
-      curriedRevHelp Env.returnRegister rest $
-        I.call_fun 1
-          : I.move arg (Beam.X 0)
-          : I.move fun (Beam.X 1)
-          : acc
+      Bag.append
+        (Bag.fromList
+          [ I.move fun (Beam.X 1)
+          , I.move arg (Beam.X 0)
+          , I.call_fun 1
+          ])
+        (curriedHelp Env.returnRegister rest)
+
+
+concatBags :: (a -> Bag b) -> [ a ] -> Bag b
+concatBags _ []     = Bag.empty
+concatBags f (a:as) = Bag.append (f a) (concatBags f as)
+
+
+appendBags3 :: Bag a -> Bag a -> Bag a -> Bag a
+appendBags3 first second third =
+  Bag.append first $ Bag.append second third
