@@ -31,14 +31,14 @@ generate (Module.Module moduleName _ info) =
   in
   Beam.encode "pine" Env.metadata $ Env.run moduleName $
     do  mapM_ (BeamVar.declare moduleName) defs
-        concatBags id <$> mapM (fromDef moduleName) defs
+        concatBags id <$> mapM (fromDef moduleName BeamVar.initial) defs
 
 
-fromDef :: ModuleName.Canonical -> Opt.Def -> Env.Gen (Bag Beam.Op)
-fromDef moduleName def =
+fromDef :: ModuleName.Canonical -> BeamVar.Context -> Opt.Def -> Env.Gen (Bag Beam.Op)
+fromDef moduleName context def =
   do  BeamVar.Def args body prelude <- BeamVar.define moduleName def
       argOps <- mapM Env.registerArgument args
-      Env.Value bodyOps result <- fromExpr body
+      Env.Value bodyOps result <- fromExpr context body
       stackNeeded <- Env.getStackAllocations
       return $ concatBags id
         [ prelude
@@ -53,29 +53,29 @@ fromDef moduleName def =
         ]
 
 
-fromExpr :: Opt.Expr -> Env.Gen Env.Value
-fromExpr expr =
+fromExpr :: BeamVar.Context -> Opt.Expr -> Env.Gen Env.Value
+fromExpr context expr =
   case expr of
     Opt.Literal literal ->
       return $ Env.Value Bag.empty (fromLiteral literal)
 
     Opt.Var variable ->
-      BeamVar.standalone variable
+      BeamVar.standalone context variable
 
     Opt.ExplicitList elements ->
       let
         fromList [] =
           fromData "[]" []
         fromList (first : rest) =
-          do  firstValue <- fromExpr first
+          do  firstValue <- fromExpr BeamVar.notTail first
               restValue  <- fromList rest
               fromData "::" [ firstValue, restValue ]
       in fromList elements
 
     Opt.Binop operator left right | builtIn operator ->
       do  dest <- Env.freshStackAllocation
-          Env.Value leftOps leftResult   <- fromExpr left
-          Env.Value rightOps rightResult <- fromExpr right
+          Env.Value leftOps leftResult   <- fromExpr BeamVar.notTail left
+          Env.Value rightOps rightResult <- fromExpr BeamVar.notTail right
           let ops = concatBags id
                 [ leftOps
                 , rightOps
@@ -84,27 +84,29 @@ fromExpr expr =
           return $ Env.Value ops (Beam.toSource dest)
 
     Opt.Binop variable left right -> 
-      BeamVar.explicitCall variable =<< mapM fromExpr [ left, right ]
+      do  argValues <- mapM (fromExpr BeamVar.notTail) [ left, right ]
+          BeamVar.explicitCall context variable argValues
 
     Opt.Function _ _ ->
       error "TODO: function"
 
     Opt.Call (Opt.Var variable) args ->
-      BeamVar.explicitCall variable =<< mapM fromExpr args
+      do  argValues <- mapM (fromExpr BeamVar.notTail) args
+          BeamVar.explicitCall context variable argValues
 
     Opt.Call function args ->
-      do  functionValue <- fromExpr function
-          argValues     <- mapM fromExpr args
-          BeamVar.genericCall functionValue argValues
+      do  functionValue <- fromExpr BeamVar.notTail function
+          argValues     <- mapM (fromExpr BeamVar.notTail) args
+          BeamVar.genericCall context functionValue argValues
 
     Opt.TailCall function _ args ->
       do  home <- Var.TopLevel <$> Env.getModuleName
-          argValues  <- mapM fromExpr args
-          BeamVar.explicitCall (Var.Canonical home function) argValues
+          argValues  <- mapM (fromExpr BeamVar.notTail) args
+          BeamVar.explicitCall context (Var.Canonical home function) argValues
 
     Opt.If branches elseExpr ->
-      do  elseValue <- fromExpr elseExpr
-          finalJump <- Env.freshLabel
+      do  elseValue <- fromExpr context elseExpr
+          finalJump <- Env.freshLabel {- TODO: if tail, return -}
           dest      <- Env.freshStackAllocation
           let elseOps = Bag.append
                 (Env.ops elseValue)
@@ -113,23 +115,23 @@ fromExpr expr =
                   , I.label finalJump
                   ])
           Env.Value
-            <$> foldr (fromBranch finalJump dest) (return elseOps) branches
+            <$> foldr (fromBranch context finalJump dest) (return elseOps) branches
             <*> return (Beam.toSource dest)
 
     Opt.Let locals body ->
       do  preOps <- concatBags id <$> mapM fromLet locals
-          Env.Value ops result <- fromExpr body
+          Env.Value ops result <- fromExpr context body
           return $ Env.Value (Bag.append preOps ops) result
 
     Opt.Case _ decider _ ->
-      fromDecider decider
+      fromDecider context decider
 
     Opt.Data constructor args ->
-      fromData constructor =<< mapM fromExpr args
+      fromData constructor =<< mapM (fromExpr BeamVar.notTail) args
 
     Opt.DataAccess data_ index ->
       do  dest <- Env.freshStackAllocation
-          Env.Value ops result <- fromExpr data_
+          Env.Value ops result <- fromExpr BeamVar.notTail data_
           let get =
                 Bag.fromList
                   [ I.move result dest
@@ -140,7 +142,7 @@ fromExpr expr =
     Opt.Access record field ->
       do  dest <- Env.freshStackAllocation
           loopOnFail <- Env.freshLabel
-          Env.Value recordOps recordResult <- fromExpr record
+          Env.Value recordOps recordResult <- fromExpr BeamVar.notTail record
           let getOps =
                 Bag.fromList
                   [ I.label loopOnFail
@@ -151,7 +153,7 @@ fromExpr expr =
           return $ Env.Value (Bag.append recordOps getOps) (Beam.toSource dest)
 
     Opt.Update record fields ->
-      do  Env.Value recordOps recordResult <- fromExpr record
+      do  Env.Value recordOps recordResult <- fromExpr BeamVar.notTail record
           Env.Value fieldsOps fieldsResult <- fromRecord recordResult fields
           return $ Env.Value (Bag.append recordOps fieldsOps) fieldsResult
 
@@ -171,7 +173,7 @@ fromExpr expr =
       error "TODO"
 
     Opt.Program _ program ->
-      fromExpr program
+      fromExpr context program
 
     Opt.GLShader _ _ _ ->
       error "shaders are not supported for server programs"
@@ -217,7 +219,7 @@ fromData constructor values =
 fromRecord :: Beam.IsSource src => src -> [(String, Opt.Expr)] -> Env.Gen Env.Value
 fromRecord record fields =
   do  dest <- Env.freshStackAllocation
-      valuePairs <- mapM (\(k, v) -> (,) k <$> fromExpr v) fields
+      valuePairs <- mapM fromRecordPair fields
       let ops = Bag.append
             (concatBags (Env.ops . snd) valuePairs)
             (Bag.singleton
@@ -226,18 +228,24 @@ fromRecord record fields =
       return $ Env.Value ops (Beam.toSource dest)
 
 
+fromRecordPair :: ( String, Opt.Expr ) -> Env.Gen ( String, Env.Value )
+fromRecordPair (key, expr) =
+  do  valueValue <- fromExpr BeamVar.notTail expr
+      return (key, valueValue)
+
+
 fromLet :: Opt.Def -> Env.Gen (Bag Beam.Op)
 fromLet def =
   do  (dest, expr) <- BeamVar.defineLocal def
-      Env.Value ops result <- fromExpr expr
+      Env.Value ops result <- fromExpr BeamVar.notTail expr
       return $ Bag.append ops $ Bag.singleton (I.move result dest)
 
 
-fromDecider :: Opt.Decider Opt.Choice -> Env.Gen Env.Value
-fromDecider decider =
+fromDecider :: BeamVar.Context -> Opt.Decider Opt.Choice -> Env.Gen Env.Value
+fromDecider context decider =
   case decider of
     Opt.Leaf (Opt.Inline expr) ->
-      fromExpr expr
+      fromExpr context expr
 
     Opt.Leaf (Opt.Jump _) ->
       error "TODO: leaf"
@@ -249,10 +257,10 @@ fromDecider decider =
       error "TODO: fan out"
 
 
-fromBranch :: Beam.Label -> Beam.Y -> ( Opt.Expr, Opt.Expr ) -> Env.Gen (Bag Beam.Op) -> Env.Gen (Bag Beam.Op)
-fromBranch finalJump dest ( condExpr, ifExpr ) elseOps =
-  do  condValue <- fromExpr condExpr
-      ifValue   <- fromExpr ifExpr
+fromBranch :: BeamVar.Context -> Beam.Label -> Beam.Y -> ( Opt.Expr, Opt.Expr ) -> Env.Gen (Bag Beam.Op) -> Env.Gen (Bag Beam.Op)
+fromBranch context finalJump dest ( condExpr, ifExpr ) elseOps =
+  do  condValue <- fromExpr BeamVar.notTail condExpr
+      ifValue   <- fromExpr context ifExpr
       elseJump  <- Env.freshLabel
       let ops = concatBags id
             [ Env.ops condValue

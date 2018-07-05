@@ -3,6 +3,7 @@ module Generate.Beam.Variable
   ( Def(..)
   , declare, define, defineLocal
   , standalone, explicitCall, genericCall
+  , Context, initial, notTail
   ) where
 
 import Data.Monoid ((<>))
@@ -111,6 +112,18 @@ curriedOffset (Beam.Label i) =
 
 
 
+-- TAIL CALL
+
+newtype Context = IsTailCall Bool
+
+initial :: Context
+initial = IsTailCall True
+
+notTail :: Context
+notTail = IsTailCall False
+
+
+
 -- SETUP CURRYING
 
 
@@ -182,8 +195,8 @@ lambdaName (Ctx _ arity) baseName =
 -- USE
 
 
-standalone :: Var.Canonical -> Env.Gen Env.Value
-standalone (Var.Canonical home name) =
+standalone :: Context -> Var.Canonical -> Env.Gen Env.Value
+standalone context (Var.Canonical home name) =
   case home of
     Var.BuiltIn             -> error "TODO"
     Var.Module moduleName   -> referToTopLevel moduleName name
@@ -191,25 +204,25 @@ standalone (Var.Canonical home name) =
     Var.Local               -> referToLocal name
 
 
-explicitCall :: Var.Canonical -> [ Env.Value ] -> Env.Gen Env.Value
-explicitCall (Var.Canonical home name) args =
+explicitCall :: Context -> Var.Canonical -> [ Env.Value ] -> Env.Gen Env.Value
+explicitCall context (Var.Canonical home name) args =
   case home of
     Var.BuiltIn             -> error "TODO"
-    Var.Module moduleName   -> tryExactCall moduleName name args
-    Var.TopLevel moduleName -> tryExactCall moduleName name args
+    Var.Module moduleName   -> tryExactCall context moduleName name args
+    Var.TopLevel moduleName -> tryExactCall context moduleName name args
     Var.Local               -> referToLocal name
 
 
-tryExactCall :: ModuleName.Canonical -> String -> [ Env.Value ] -> Env.Gen Env.Value
-tryExactCall moduleName name args =
+tryExactCall :: Context -> ModuleName.Canonical -> String -> [ Env.Value ] -> Env.Gen Env.Value
+tryExactCall context moduleName name args =
   do  ( label, arity ) <- Env.getTopLevel moduleName name
       if arity == length args
         then call Bag.empty $ qualified label args
-        else flip genericCall args =<< referToTopLevel moduleName name
+        else flip (genericCall context) args =<< referToTopLevel moduleName name
 
 
-genericCall :: Env.Value -> [ Env.Value ] -> Env.Gen Env.Value
-genericCall (Env.Value ops result) args =
+genericCall :: Context -> Env.Value -> [ Env.Value ] -> Env.Gen Env.Value
+genericCall context (Env.Value ops result) args =
   call ops $ curried result args
 
 
