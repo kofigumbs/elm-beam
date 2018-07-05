@@ -41,6 +41,17 @@ handleCall inc ({ i } as s) =
 
 
 
+-- RECURSIVE
+
+
+upTo5 n =
+    if n == 5 then
+        n
+    else
+        upTo5 (n + 1)
+
+
+
 -- MUTUALLY RECURSIVE
 
 

@@ -2,6 +2,7 @@
 module Generate.Beam.Environment
   ( run, metadata, Gen
   , Value(..)
+  , getModuleName
   , freshLabel
   , freshStackAllocation, getStackAllocations, resetStackAllocation
   , registerTopLevel, getTopLevel
@@ -30,7 +31,8 @@ type Gen a =
 
 
 data Env = Env
-  { _nextLabel :: Int
+  { _moduleName :: ModuleName.Canonical
+  , _nextLabel :: Int
   , _nextStackAllocation :: Int
   , _topLevels :: Map.Map (ModuleName.Canonical, String) (Beam.Label, Int)
   , _locals :: Map.Map String Beam.Y
@@ -39,7 +41,7 @@ data Env = Env
 
 run :: ModuleName.Canonical -> Gen (Bag Beam.Op) -> [ Beam.Op ]
 run moduleName moduleOps =
-  Bag.toList id $ evaluate $ concatBagsM
+  Bag.toList id $ evaluate moduleName $ concatBagsM
     [ BuiltIn.server
         <$> freshLabel
         <*> registerExternal (ModuleName.inCore ["Platform"]) "server" 1
@@ -51,9 +53,9 @@ run moduleName moduleOps =
     ]
 
 
-evaluate :: Gen a -> a
-evaluate thunk =
-  State.evalState thunk (Env 1 0 Map.empty Map.empty)
+evaluate :: ModuleName.Canonical -> Gen a -> a
+evaluate moduleName thunk =
+  State.evalState thunk (Env moduleName 1 0 Map.empty Map.empty)
 
 
 concatBagsM :: Monad m => [ m (Bag a) ] -> m (Bag a)
@@ -82,6 +84,11 @@ data Value = Value
   { ops :: Bag Beam.Op
   , result :: Beam.Source
   }
+
+
+getModuleName :: Gen ModuleName.Canonical
+getModuleName =
+  State.gets _moduleName
 
 
 registerExternal :: ModuleName.Canonical -> String -> Int -> Gen Beam.Label

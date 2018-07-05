@@ -97,8 +97,10 @@ fromExpr expr =
           argValues     <- mapM fromExpr args
           BeamVar.genericCall functionValue argValues
 
-    Opt.TailCall _ _ _ ->
-      error "TODO: tail call"
+    Opt.TailCall function _ args ->
+      do  home <- Var.TopLevel <$> Env.getModuleName
+          argValues  <- mapM fromExpr args
+          BeamVar.explicitCall (Var.Canonical home function) argValues
 
     Opt.If branches elseExpr ->
       do  elseValue <- fromExpr elseExpr

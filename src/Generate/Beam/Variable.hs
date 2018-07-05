@@ -27,23 +27,21 @@ declare :: ModuleName.Canonical -> Opt.Def -> Env.Gen ()
 declare moduleName def =
   case def of
     Opt.Def _ name (Opt.Function args _) ->
-      do  let arity = length args
-          reserveCurriedLabel name arity
-          Env.registerTopLevel moduleName name arity
+      registerRequiredLabels moduleName name (length args)
 
     Opt.Def _ name _ ->
-      Env.registerTopLevel moduleName name 0
+      registerRequiredLabels moduleName name 0
 
-    Opt.TailDef _ _ _ _ ->
-      error "TODO: tail definition"
+    Opt.TailDef _ name args _ ->
+      registerRequiredLabels moduleName name (length args)
 
 
-reserveCurriedLabel :: String -> Int -> Env.Gen ()
-reserveCurriedLabel name arity =
+registerRequiredLabels :: ModuleName.Canonical -> String -> Int -> Env.Gen ()
+registerRequiredLabels moduleName name arity =
   if alwaysExplicit name arity then
-    return ()
+    Env.registerTopLevel moduleName name arity
   else
-    Env.freshLabel >> return ()
+    Env.freshLabel >> Env.registerTopLevel moduleName name arity
 
 
 data Def = Def
@@ -62,8 +60,8 @@ define moduleName def =
     Opt.Def _ name expr ->
       Def [] expr <$> topLevelOps moduleName name
 
-    Opt.TailDef _ _ _ _ ->
-      error "TODO: tail definition"
+    Opt.TailDef _ name args expr ->
+      Def args expr <$> topLevelOps moduleName name
 
 
 defineLocal :: Opt.Def -> Env.Gen ( Beam.Y, Opt.Expr )
