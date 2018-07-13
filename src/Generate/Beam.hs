@@ -106,7 +106,7 @@ fromExpr context expr =
 
     Opt.If branches elseExpr ->
       do  elseValue <- fromExpr context elseExpr
-          finalJump <- Env.freshLabel {- TODO: if tail, return -}
+          finalJump <- Env.freshLabel
           dest      <- Env.freshStackAllocation
           let elseOps = Bag.append
                 (Env.ops elseValue)

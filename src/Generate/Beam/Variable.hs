@@ -114,13 +114,13 @@ curriedOffset (Beam.Label i) =
 
 -- TAIL CALL
 
-newtype Context = IsTailCall Bool
+newtype Context = Context { _isTailCall :: Bool }
 
 initial :: Context
-initial = IsTailCall True
+initial = Context True
 
 notTail :: Context
-notTail = IsTailCall False
+notTail = Context False
 
 
 
@@ -137,17 +137,18 @@ curriedOps :: Text.Text -> Ctx -> Ctx -> Env.Gen (Bag Beam.Op)
 curriedOps name original current =
   if _ctx_arity original == _ctx_arity current then
     do  pre <- Env.freshLabel
-        return $ appendBags3
-          (Bag.fromList
-            [ I.label pre
-            , I.func_info (lambdaName current name) (_ctx_arity original)
-            , I.label (_ctx_label current)
-            ])
-          (reverseXs original)
-          (Bag.fromList
-            [ I.call_only (_ctx_arity original) (_ctx_label original)
-            , I.return'
-            ])
+        return $ concatBags id
+          [ Bag.fromList
+              [ I.label pre
+              , I.func_info (lambdaName current name) (_ctx_arity original)
+              , I.label (_ctx_label current)
+              ]
+          , reverseXs original
+          , Bag.fromList
+              [ I.call_only (_ctx_arity original) (_ctx_label original)
+              , I.return'
+              ]
+          ]
   else
     do  pre <- Env.freshLabel
         next <- Ctx <$> Env.freshLabel <*> return (_ctx_arity current + 1)
@@ -199,8 +200,8 @@ standalone :: Context -> Var.Canonical -> Env.Gen Env.Value
 standalone context (Var.Canonical home name) =
   case home of
     Var.BuiltIn             -> error "TODO"
-    Var.Module moduleName   -> referToTopLevel moduleName name
-    Var.TopLevel moduleName -> referToTopLevel moduleName name
+    Var.Module moduleName   -> referToTopLevel context moduleName name
+    Var.TopLevel moduleName -> referToTopLevel context moduleName name
     Var.Local               -> referToLocal name
 
 
@@ -217,8 +218,8 @@ tryExactCall :: Context -> ModuleName.Canonical -> String -> [ Env.Value ] -> En
 tryExactCall context moduleName name args =
   do  ( label, arity ) <- Env.getTopLevel moduleName name
       if arity == length args
-        then call Bag.empty $ qualified label args
-        else flip (genericCall context) args =<< referToTopLevel moduleName name
+        then call Bag.empty $ qualified context label args
+        else flip (genericCall context) args =<< referToTopLevel notTail moduleName name
 
 
 genericCall :: Context -> Env.Value -> [ Env.Value ] -> Env.Gen Env.Value
@@ -229,27 +230,31 @@ genericCall context (Env.Value ops result) args =
 call :: Bag Beam.Op -> Bag Beam.Op -> Env.Gen Env.Value
 call functionOps callOps =
   do  dest <- Env.freshStackAllocation
-      let move = Bag.singleton (I.move Env.returnRegister dest)
-          ops  = appendBags3 functionOps callOps move
+      let ops = concatBags id
+            [ functionOps
+            , callOps
+            , Bag.singleton (I.move Env.returnRegister dest)
+            ]
       return $ Env.Value ops (Beam.toSource dest)
 
 
-referToTopLevel :: ModuleName.Canonical -> String -> Env.Gen Env.Value
-referToTopLevel moduleName name =
+referToTopLevel :: Context -> ModuleName.Canonical -> String -> Env.Gen Env.Value
+referToTopLevel context moduleName name =
   do  ( label@(Beam.Label i), arity ) <- Env.getTopLevel moduleName name
       dest <- Env.freshStackAllocation
       return $ Env.Value
         (Bag.fromList
-          [ referByArity moduleName name label arity
+          [ referByArity context moduleName name label arity
           , I.move Env.returnRegister dest
           ])
         (Beam.toSource dest)
 
 
-referByArity :: ModuleName.Canonical -> String -> Beam.Label -> Int -> Beam.Op
-referByArity moduleName name label arity =
+referByArity :: Context -> ModuleName.Canonical -> String -> Beam.Label -> Int -> Beam.Op
+referByArity context moduleName name label arity =
   case arity of
     0 ->
+      -- TODO: if tail context, use `call_last`
       I.call 0 label
 
     1 ->
@@ -278,11 +283,12 @@ referToLocal name =
 -- DIFFERENT WAYS TO CALL A FUNCTION
 
 
-qualified :: Beam.Label -> [ Env.Value ] -> Bag Beam.Op
-qualified label argValues =
+qualified :: Context -> Beam.Label -> [ Env.Value ] -> Bag Beam.Op
+qualified context label argValues =
   concatBags id
     [ concatBags Env.ops argValues
     , Bag.fromList (zipWith moveArg argValues [0..])
+    -- TODO: if tail context, use `call_last`
     , Bag.singleton (I.call (length argValues) label)
     ]
 
@@ -316,8 +322,3 @@ curriedHelp fun argValues =
 concatBags :: (a -> Bag b) -> [ a ] -> Bag b
 concatBags _ []     = Bag.empty
 concatBags f (a:as) = Bag.append (f a) (concatBags f as)
-
-
-appendBags3 :: Bag a -> Bag a -> Bag a -> Bag a
-appendBags3 first second third =
-  Bag.append first $ Bag.append second third
