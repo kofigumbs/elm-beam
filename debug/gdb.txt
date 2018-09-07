@@ -1,0 +1,913 @@
+
+~/pine (master)
+$ ulimit -c unlimited
+
+~/pine (master)
+$ erl
+/usr/lib/erlang/erts-9.2/bin/beam.smp: /lib/x86_64-linux-gnu/libtinfo.so.5: no versio
+n information available (required by /usr/lib/erlang/erts-9.2/bin/beam.smp)
+Erlang/OTP 20 [erts-9.2] [source] [64-bit] [smp:4:4] [ds:4:4:10] [async-threads:10] [
+hipe] [kernel-poll:false]
+
+Eshell V9.2  (abort with ^G)
+1> l(pine).
+{module,pine}
+2> gen_server:start({local, pine}, pine, [], []).
+{ok,<0.64.0>}
+3> gen_server:call(pine, {}).
+#{i => 2}
+4> gen_server:call(pine, {}).
+#{i => 3}
+5> gen_server:call(pine, {}).
+#{i => 4}
+6> gen_server:call(pine, {}).
+#{i => 5}
+7> gen_server:call(pine, {}).
+#{i => 6}
+8> gen_server:call(pine, {}).
+#{i => 7}
+9> gen_server:call(pine, {}).
+#{i => -7}
+10> gen_server:call(pine, {}).
+#{i => -6}
+11> gen_server:call(pine, {}).
+#{i => -5}
+12> gen_server:call(pine, {}).
+#{i => -4}
+13> gen_server:call(pine, {}).
+#{i => -3}
+14> gen_server:call(pine, {}).
+#{i => -2}
+15> gen_server:call(pine, {}).
+#{i => -1}
+16> gen_server:call(pine, {}).
+Segmentation fault (core dumped)
+
+~/pine (master)
+$ erl
+/usr/lib/erlang/erts-9.2/bin/beam.smp: /lib/x86_64-linux-gnu/libtinfo.so.5: no versio
+n information available (required by /usr/lib/erlang/erts-9.2/bin/beam.smp)
+Erlang/OTP 20 [erts-9.2] [source] [64-bit] [smp:4:4] [ds:4:4:10] [async-threads:10] [
+hipe] [kernel-poll:false]
+
+Eshell V9.2  (abort with ^G)
+1>
+BREAK: (a)bort (c)ontinue (p)roc info (i)nfo (l)oaded
+       (v)ersion (k)ill (D)b-tables (d)istribution
+a
+
+~/pine (master)
+$ ll
+total 18M
+-rw------- 1  62M Aug 26 19:37 core
+drwxrwxr-x 7 4.0K Aug 26 19:28 elm-compiler/
+drwxrwxr-x 9 4.0K Aug 26 19:28 .git/
+-rw-rw-r-- 1   19 Aug 26 19:27 .gitignore
+-rw-rw-r-- 1   96 Aug 26 19:27 .gitmodules
+-rw-rw-r-- 1 1.5K Aug 26 19:27 LICENSE
+-rw-rw-r-- 1 1.4K Aug 26 19:37 pine.beam
+-rw-rw-r-- 1 3.2K Aug 26 19:27 pine.cabal
+-rw-rw-r-- 1  404 Aug 26 19:27 README.md
+drwxrwxr-x 4 4.0K Aug 26 19:27 src/
+drwxrwxr-x 5 4.0K Aug 26 19:33 .stack-work/
+-rw-rw-r-- 1   47 Aug 26 19:27 stack.yaml
+-rw-rw-r-- 1  789 Aug 26 19:27 Test.elm
+
+~/pine (master)
+$ cd ..
+
+~
+$ git clone https://github.com/erlang-otp erlang-otp
+Cloning into 'erlang-otp'...
+fatal: repository 'https://github.com/erlang-otp/' not found
+
+~
+$ git clone https://github.com/erlang/otp erlang-otp
+Cloning into 'erlang-otp'...
+remote: Counting objects: 288238, done.
+remote: Compressing objects: 100% (2/2), done.
+remote: Total 288238 (delta 1), reused 1 (delta 1), pack-reused 288235
+Receiving objects: 100% (288238/288238), 243.77 MiB | 6.14 MiB/s, done.
+Resolving deltas: 100% (229478/229478), done.
+Checking connectivity... done.
+
+~
+$ cd pine
+
+~/pine (master)
+$ gdb ../erlang-otp/bin/x86_64-apple-darwin17.7.0/beam.debug.smp --core core -d ../erlang-otp/erts/emulator  ^C
+
+~/pine (master)
+$ cd ../erlang-otp/
+
+~/erlang-otp (master)
+$ git checkout maint-20
+Branch maint-20 set up to track remote branch maint-20 from origin.
+Switched to a new branch 'maint-20'
+
+~/erlang-otp (maint-20)
+$ cd -
+/home/vagrant/pine
+
+~/pine (master)
+$ gdb ../erlang-otp/bin/x86_64-apple-darwin17.7.0/beam.debug.smp --core core -d ../erlang-otp/erts/emulator
+The program 'gdb' can be found in the following packages:
+ * gdb
+ * gdb-minimal
+Try: sudo apt-get install <selected package>
+
+~/pine (master)
+$ sudo apt-get install gdb
+Reading package lists... Done
+Building dependency tree
+Reading state information... Done
+The following packages were automatically installed and are no longer required:
+  libxml2-dev libxslt1-dev
+Use 'apt-get autoremove' to remove them.
+The following extra packages will be installed:
+  libc6-dbg
+Suggested packages:
+  gdb-doc gdbserver
+Recommended packages:
+  libc-dbg
+The following NEW packages will be installed:
+  gdb libc6-dbg
+0 upgraded, 2 newly installed, 0 to remove and 257 not upgraded.
+Need to get 5,663 kB of archives.
+After this operation, 29.4 MB of additional disk space will be used.
+Do you want to continue? [Y/n] Y
+Get:1 http://us.archive.ubuntu.com/ubuntu/ trusty-updates/main gdb amd64 7.7.1-0ubuntu5~14.04.3 [2,199 kB]
+Get:2 http://us.archive.ubuntu.com/ubuntu/ trusty-updates/main libc6-dbg amd64 2.19-0ubuntu6.14 [3,464 kB]
+Fetched 5,663 kB in 1s (3,000 kB/s)
+Selecting previously unselected package gdb.
+(Reading database ... 199388 files and directories currently installed.)
+Preparing to unpack .../gdb_7.7.1-0ubuntu5~14.04.3_amd64.deb ...
+Unpacking gdb (7.7.1-0ubuntu5~14.04.3) ...
+Selecting previously unselected package libc6-dbg:amd64.
+Preparing to unpack .../libc6-dbg_2.19-0ubuntu6.14_amd64.deb ...
+Unpacking libc6-dbg:amd64 (2.19-0ubuntu6.14) ...
+Processing triggers for man-db (2.6.7.1-1ubuntu1) ...
+Setting up gdb (7.7.1-0ubuntu5~14.04.3) ...
+Setting up libc6-dbg:amd64 (2.19-0ubuntu6.14) ...
+
+~/pine (master)
+$ gdb ../erlang-otp/bin/x86_64-apple-darwin17.7.0/beam.debug.smp --core core -d ../erlang-otp/erts/emulator
+GNU gdb (Ubuntu 7.7.1-0ubuntu5~14.04.3) 7.7.1
+Copyright (C) 2014 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+<http://www.gnu.org/software/gdb/documentation/>.
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+../erlang-otp/bin/x86_64-apple-darwin17.7.0/beam.debug.smp: No such file or directory.
+[New LWP 24130]
+[New LWP 24132]
+[New LWP 24110]
+[New LWP 24135]
+[New LWP 24145]
+[New LWP 24137]
+[New LWP 24134]
+[New LWP 24129]
+[New LWP 24140]
+[New LWP 24127]
+[New LWP 24128]
+[New LWP 24114]
+[New LWP 24144]
+[New LWP 24143]
+[New LWP 24141]
+[New LWP 24142]
+[New LWP 24139]
+[New LWP 24136]
+[New LWP 24138]
+[New LWP 24133]
+[New LWP 24131]
+[New LWP 24115]
+[New LWP 24119]
+[New LWP 24123]
+[New LWP 24116]
+[New LWP 24124]
+[New LWP 24118]
+[New LWP 24121]
+[New LWP 24120]
+[New LWP 24117]
+[New LWP 24122]
+[New LWP 24125]
+---Type <return> to continue, or q <return> to quit---
+Core was generated by `/usr/lib/erlang/erts-9.2/bin/beam.smp -- -root /usr/lib/erlang -progname erl --'.
+Program terminated with signal SIGSEGV, Segmentation fault.
+#0  0x0000000000593587 in ?? ()
+(gdb) bt
+#0  0x0000000000593587 in ?? ()
+#1  0x00007f405603d800 in ?? ()
+#2  0x0000000000000110 in ?? ()
+#3  0x00007f4055fe3498 in ?? ()
+#4  0x0000000000000001 in ?? ()
+#5  0x00007f4055fe3480 in ?? ()
+#6  0x0000000000000060 in ?? ()
+#7  0x00007f4058a05770 in ?? ()
+#8  0x00007f4055fc77b8 in ?? ()
+#9  0x00000000000000e9 in ?? ()
+#10 0x00007f40568b89a8 in ?? ()
+#11 0x00007f40568b89a0 in ?? ()
+#12 0x0000000000000748 in ?? ()
+#13 0x0000000000000002 in ?? ()
+---Type <return> to continue, or q <return> to quit---
+#14 0x000000000288db40 in ?? ()
+#15 0x0000000000000001 in ?? ()
+#16 0x00007f4055fe3498 in ?? ()
+#17 0x00007f4055fe34e0 in ?? ()
+#18 0x0000000002890100 in ?? ()
+#19 0x00007f4055fe3498 in ?? ()
+#20 0x00007f4055fe3488 in ?? ()
+#21 0x00007f4055fedc98 in ?? ()
+#22 0x0000000000000071 in ?? ()
+#23 0x00007f4059581c28 in ?? ()
+#24 0x0000000000000008 in ?? ()
+#25 0x00007f405914c2c0 in ?? ()
+#26 0x0000000000000001 in ?? ()
+#27 0x00000000000006e2 in ?? ()
+---Type <return> to continue, or q <return> to quit---
+#28 0x00000000005a8e67 in ?? ()
+#29 0x00007f4055fe2692 in ?? ()
+#30 0x0000000000000000 in ?? ()
+(gdb)
+(gdb)
+(gdb)
+(gdb)
+(gdb)
+(gdb)
+(gdb)
+(gdb) quit
+
+~/pine (master)
+$ ../erlang-otp/bin/erl -emu_type debug
+Erlang/OTP 20 [erts-9.3.3.3] [source] [64-bit] [smp:4:4] [ds:4:4:10] [async-threads:
+10] [hipe] [kernel-poll:false] [type-assertions] [debug-compiled] [lock-checking]
+
+Eshell V9.3.3.3  (abort with ^G)
+1> l(pine).
+{module,pine}
+2> gen_server:start({local, pine}, pine, [], []).
+{ok,<0.64.0>}
+3> gen_server:call(pine, {}).
+#{i => 2}
+4> gen_server:call(pine, {}).
+#{i => 3}
+5> gen_server:call(pine, {}).
+#{i => 4}
+6> gen_server:call(pine, {}).
+#{i => 5}
+7> gen_server:call(pine, {}).
+#{i => 6}
+8> gen_server:call(pine, {}).
+#{i => 7}
+9> gen_server:call(pine, {}).
+#{i => -7}
+10> gen_server:call(pine, {}).
+#{i => -6}
+11> gen_server:call(pine, {}).
+#{i => -5}
+12> gen_server:call(pine, {}).
+#{i => -4}
+13> gen_server:call(pine, {}).
+#{i => -3}
+14> gen_server:call(pine, {}).
+#{i => -2}
+15> gen_server:call(pine, {}).
+#{i => -1}
+16> gen_server:call(pine, {}).
+#{i => 1}
+17> gen_server:call(pine, {}).
+#{i => 2}
+18> gen_server:call(pine, {}).
+#{i => 3}
+19> gen_server:call(pine, {}).
+#{i => 4}
+20> gen_server:call(pine, {}).
+#{i => 5}
+21> gen_server:call(pine, {}).
+#{i => 6}
+22> gen_server:call(pine, {}).
+#{i => 7}
+23> gen_server:call(pine, {}).
+#{i => -7}
+24> gen_server:call(pine, {}).
+#{i => -6}
+25> gen_server:call(pine, {}).
+#{i => -5}
+26> gen_server:call(pine, {}).
+#{i => -4}
+27> gen_server:call(pine, {}).
+#{i => -3}
+28> gen_server:call(pine, {}).
+#{i => -2}
+29> gen_server:call(pine, {}).
+#{i => -1}
+30> gen_server:call(pine, {}).
+#{i => 1}
+31> gen_server:call(pine, {}).
+#{i => 2}
+32> gen_server:call(pine, {}).
+#{i => 3}
+33> gen_server:call(pine, {}).
+#{i => 4}
+34> gen_server:call(pine, {}).
+#{i => 5}
+35> gen_server:call(pine, {}).
+#{i => 6}
+36> gen_server:call(pine, {}).
+#{i => 7}
+37> gen_server:call(pine, {}).
+#{i => -7}
+38> gen_server:call(pine, {}).
+#{i => -6}
+39> gen_server:call(pine, {}).
+#{i => -5}
+40> gen_server:call(pine, {}).
+#{i => -4}
+41> gen_server:call(pine, {}).
+#{i => -3}
+42> gen_server:call(pine, {}).
+#{i => -2}
+43> gen_server:call(pine, {}).
+#{i => -1}
+44> gen_server:call(pine, {}).
+#{i => 1}
+45> gen_server:call(pine, {}).
+#{i => 2}
+46> gen_server:call(pine, {}).
+#{i => 3}
+47> gen_server:call(pine, {}).
+#{i => 4}
+48> gen_server:call(pine, {}).
+#{i => 5}
+49> gen_server:call(pine, {}).
+#{i => 6}
+50> gen_server:call(pine, {}).
+#{i => 7}
+51> gen_server:call(pine, {}).
+#{i => -7}
+52> gen_server:call(pine, {}).
+#{i => -6}
+53> gen_server:call(pine, {}).
+#{i => -5}
+54> gen_server:call(pine, {}).
+#{i => -4}
+55> gen_server:call(pine, {}).
+#{i => -3}
+56> gen_server:call(pine, {}).
+#{i => -2}
+57> gen_server:call(pine, {}).
+#{i => -1}
+58> gen_server:call(pine, {}).
+Segmentation fault (core dumped)
+
+~/pine (master)
+$ ll
+total 18M
+-rw------- 1  56M Aug 26 20:04 core
+drwxrwxr-x 7 4.0K Aug 26 19:28 elm-compiler/
+drwxrwxr-x 9 4.0K Aug 26 19:28 .git/
+-rw-rw-r-- 1   19 Aug 26 19:27 .gitignore
+-rw-rw-r-- 1   96 Aug 26 19:27 .gitmodules
+-rw-rw-r-- 1 1.5K Aug 26 19:27 LICENSE
+-rw-rw-r-- 1 1.4K Aug 26 19:37 pine.beam
+-rw-rw-r-- 1 3.2K Aug 26 19:27 pine.cabal
+-rw-rw-r-- 1  404 Aug 26 19:27 README.md
+drwxrwxr-x 4 4.0K Aug 26 19:27 src/
+drwxrwxr-x 5 4.0K Aug 26 19:33 .stack-work/
+-rw-rw-r-- 1   47 Aug 26 19:27 stack.yaml
+-rw-rw-r-- 1  789 Aug 26 19:27 Test.elm
+
+~/pine (master)
+$ gdb ../erlang-otp/bin/x86_64-apple-darwin17.7.0/beam.debug.smp --core core -d ../e
+rlang-otp/erts/emulator
+GNU gdb (Ubuntu 7.7.1-0ubuntu5~14.04.3) 7.7.1
+Copyright (C) 2014 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+<http://www.gnu.org/software/gdb/documentation/>.
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+../erlang-otp/bin/x86_64-apple-darwin17.7.0/beam.debug.smp: No such file or director
+y.
+[New LWP 4037]
+[New LWP 4020]
+[New LWP 4044]
+[New LWP 4048]
+[New LWP 4051]
+[New LWP 4054]
+[New LWP 4055]
+[New LWP 4053]
+[New LWP 4050]
+[New LWP 4052]
+[New LWP 4047]
+[New LWP 4045]
+[New LWP 4042]
+[New LWP 4027]
+[New LWP 4040]
+[New LWP 4038]
+[New LWP 4049]
+[New LWP 4046]
+[New LWP 4043]
+[New LWP 4041]
+[New LWP 4039]
+[New LWP 4035]
+[New LWP 4034]
+[New LWP 4033]
+[New LWP 4032]
+[New LWP 4031]
+[New LWP 4030]
+[New LWP 4029]
+[New LWP 4028]
+[New LWP 4026]
+[New LWP 4025]
+[New LWP 4024]
+Core was generated by `/home/vagrant/erlang-otp/bin/x86_64-unknown-linux-gnu/beam.de
+bug.smp -- -root /'.
+Program terminated with signal SIGSEGV, Segmentation fault.
+#0  0x000000000060e3c1 in ?? ()
+(gdb) backtrace
+#0  0x000000000060e3c1 in ?? ()
+#1  0x00007f4724c40100 in ?? ()
+#2  0x00000000000000e9 in ?? ()
+#3  0x0000000000000110 in ?? ()
+#4  0x00007f47222be9f8 in ?? ()
+#5  0xfffffffffffffff8 in ?? ()
+#6  0x00007f4724600100 in ?? ()
+#7  0x00007f472273cce0 in ?? ()
+#8  0x00007f47222a6d18 in ?? ()
+#9  0x00007f4721c9cc30 in ?? ()
+#10 0xaeaeaeaeaeaeaeac in ?? ()
+#11 0x00007f47222a6d18 in ?? ()
+#12 0x00007f472273cd70 in ?? ()
+#13 0x0000000000000002 in ?? ()
+#14 0x00007f47222beea0 in ?? ()
+#15 0x0000000000000053 in ?? ()
+#16 0x00000000005637d5 in ?? ()
+#17 0x00007f4721c9cbd0 in ?? ()
+#18 0x0000000000000060 in ?? ()
+#19 0x00007f47222a6d18 in ?? ()
+#20 0xaeaeaeaeaeaeaeae in ?? ()
+#21 0x0000000000000000 in ?? ()
+(gdb) quit
+
+~/pine (master)
+$ file ../erlang-otp/bin/x86_64-apple-darwin17.7.0/beam.debug.smp
+../erlang-otp/bin/x86_64-apple-darwin17.7.0/beam.debug.smp: ERROR: cannot open `../e
+rlang-otp/bin/x86_64-apple-darwin17.7.0/beam.debug.smp' (No such file or directory)
+
+~/pine (master)
+$ file ../erlang-otp/bin/x86_64-apple-darwin17.7.0/beam.debug.smp ^C
+
+~/pine (master)
+$ gdb ../erlang-otp/bin/ --core core -d ../erlang-otp/erts/emulator
+cerl                      erl                       typer
+ct_run                    erlc                      x86_64-unknown-linux-gnu/
+dialyzer                  escript
+
+~/pine (master)
+$ gdb ../erlang-otp/bin/x86_64-unknown-linux-gnu/ --core core -d ../erlang-otp/erts/
+emulator
+beam.debug.smp             erlc                       hipe_mkliterals.debug.smp
+beam.smp                   erl_child_setup            hipe_mkliterals.smp
+ct_run                     erl_child_setup.debug      inet_gethost
+dialyzer                   erlexec                    run_erl
+dyn_erl                    escript                    to_erl
+epmd                       heart                      typer
+
+~/pine (master)
+$ gdb ../erlang-otp/bin/x86_64-unknown-linux-gnu/beam.debug.smp --core core -d ../er
+lang-otp/erts/emulator
+GNU gdb (Ubuntu 7.7.1-0ubuntu5~14.04.3) 7.7.1
+Copyright (C) 2014 Free Software Foundation, Inc.
+License GPLv3+: GNU GPL version 3 or later <http://gnu.org/licenses/gpl.html>
+This is free software: you are free to change and redistribute it.
+There is NO WARRANTY, to the extent permitted by law.  Type "show copying"
+and "show warranty" for details.
+This GDB was configured as "x86_64-linux-gnu".
+Type "show configuration" for configuration details.
+For bug reporting instructions, please see:
+<http://www.gnu.org/software/gdb/bugs/>.
+Find the GDB manual and other documentation resources online at:
+<http://www.gnu.org/software/gdb/documentation/>.
+For help, type "help".
+Type "apropos word" to search for commands related to "word"...
+Reading symbols from ../erlang-otp/bin/x86_64-unknown-linux-gnu/beam.debug.smp...don
+e.
+[New LWP 4037]
+[New LWP 4020]
+[New LWP 4044]
+[New LWP 4048]
+[New LWP 4051]
+[New LWP 4054]
+[New LWP 4055]
+[New LWP 4053]
+[New LWP 4050]
+[New LWP 4052]
+[New LWP 4047]
+[New LWP 4045]
+[New LWP 4042]
+[New LWP 4027]
+[New LWP 4040]
+[New LWP 4038]
+[New LWP 4049]
+[New LWP 4046]
+[New LWP 4043]
+[New LWP 4041]
+[New LWP 4039]
+[New LWP 4035]
+[New LWP 4034]
+[New LWP 4033]
+[New LWP 4032]
+[New LWP 4031]
+[New LWP 4030]
+[New LWP 4029]
+[New LWP 4028]
+[New LWP 4026]
+[New LWP 4025]
+[New LWP 4024]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+Core was generated by `/home/vagrant/erlang-otp/bin/x86_64-unknown-linux-gnu/beam.de
+bug.smp -- -root /'.
+Program terminated with signal SIGSEGV, Segmentation fault.
+#0  0x000000000060e3c1 in do_minor (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, mature=0x7f47222be9f8 "<\001",
+    mature_size=272, new_sz=233, objv=0x7f4724c40100, nobj=1) at beam/erl_gc.c:1537
+1537                    val = *ptr;
+(gdb) backtrace
+#0  0x000000000060e3c1 in do_minor (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, mature=0x7f47222be9f8 "<\001",
+    mature_size=272, new_sz=233, objv=0x7f4724c40100, nobj=1) at beam/erl_gc.c:1537
+#1  0x000000000060d96a in minor_collection (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, need=6, objv=0x7f4724c40100, nobj=1,
+    ygen_usage=144, recl=0x7f472273d0f0) at beam/erl_gc.c:1403
+#2  0x000000000060b088 in garbage_collect (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, need=6, objv=0x7f4724c40100, nobj=1,
+    fcalls=3971, max_young_gen_usage=0) at beam/erl_gc.c:728
+#3  0x000000000060ba65 in erts_garbage_collect_nobump (p=0x7f4724600100, need=6,
+    objv=0x7f4724c40100, nobj=1, fcalls=3971) at beam/erl_gc.c:874
+#4  0x000000000044a7f9 in process_main (x_reg_array=0x7f4724c40100,
+    f_reg_array=0x7f4724c42180) at x86_64-unknown-linux-gnu/debug/smp/beam_hot.h:38
+#5  0x000000000056fbcb in sched_thread_func (vesdp=0x7f4723882600)
+    at beam/erl_process.c:8912
+#6  0x000000000075de7e in thr_wrapper (vtwd=0x7ffed69d5a20)
+    at pthread/ethread.c:118
+#7  0x00007f47658f8184 in start_thread (arg=0x7f472273f700) at pthread_create.c:312
+#8  0x00007f476541d03d in clone () at ../sysdeps/unix/sysv/linux/x86_64/clone.S:111
+(gdb) backtrace
+#0  0x000000000060e3c1 in do_minor (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, mature=0x7f47222be9f8 "<\001",
+    mature_size=272, new_sz=233, objv=0x7f4724c40100, nobj=1) at beam/erl_gc.c:1537
+#1  0x000000000060d96a in minor_collection (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, need=6, objv=0x7f4724c40100, nobj=1,
+    ygen_usage=144, recl=0x7f472273d0f0) at beam/erl_gc.c:1403
+#2  0x000000000060b088 in garbage_collect (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, need=6, objv=0x7f4724c40100, nobj=1,
+    fcalls=3971, max_young_gen_usage=0) at beam/erl_gc.c:728
+#3  0x000000000060ba65 in erts_garbage_collect_nobump (p=0x7f4724600100, need=6,
+    objv=0x7f4724c40100, nobj=1, fcalls=3971) at beam/erl_gc.c:874
+#4  0x000000000044a7f9 in process_main (x_reg_array=0x7f4724c40100,
+    f_reg_array=0x7f4724c42180) at x86_64-unknown-linux-gnu/debug/smp/beam_hot.h:38
+#5  0x000000000056fbcb in sched_thread_func (vesdp=0x7f4723882600)
+    at beam/erl_process.c:8912
+#6  0x000000000075de7e in thr_wrapper (vtwd=0x7ffed69d5a20)
+    at pthread/ethread.c:118
+#7  0x00007f47658f8184 in start_thread (arg=0x7f472273f700) at pthread_create.c:312
+#8  0x00007f476541d03d in clone () at ../sysdeps/unix/sysv/linux/x86_64/clone.S:111
+(gdb)
+#0  0x000000000060e3c1 in do_minor (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, mature=0x7f47222be9f8 "<\001",
+    mature_size=272, new_sz=233, objv=0x7f4724c40100, nobj=1) at beam/erl_gc.c:1537
+#1  0x000000000060d96a in minor_collection (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, need=6, objv=0x7f4724c40100, nobj=1,
+    ygen_usage=144, recl=0x7f472273d0f0) at beam/erl_gc.c:1403
+#2  0x000000000060b088 in garbage_collect (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, need=6, objv=0x7f4724c40100, nobj=1,
+    fcalls=3971, max_young_gen_usage=0) at beam/erl_gc.c:728
+#3  0x000000000060ba65 in erts_garbage_collect_nobump (p=0x7f4724600100, need=6,
+    objv=0x7f4724c40100, nobj=1, fcalls=3971) at beam/erl_gc.c:874
+#4  0x000000000044a7f9 in process_main (x_reg_array=0x7f4724c40100,
+    f_reg_array=0x7f4724c42180) at x86_64-unknown-linux-gnu/debug/smp/beam_hot.h:38
+#5  0x000000000056fbcb in sched_thread_func (vesdp=0x7f4723882600)
+    at beam/erl_process.c:8912
+#6  0x000000000075de7e in thr_wrapper (vtwd=0x7ffed69d5a20)
+    at pthread/ethread.c:118
+#7  0x00007f47658f8184 in start_thread (arg=0x7f472273f700) at pthread_create.c:312
+#8  0x00007f476541d03d in clone () at ../sysdeps/unix/sysv/linux/x86_64/clone.S:111
+(gdb)
+#0  0x000000000060e3c1 in do_minor (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, mature=0x7f47222be9f8 "<\001",
+    mature_size=272, new_sz=233, objv=0x7f4724c40100, nobj=1) at beam/erl_gc.c:1537
+#1  0x000000000060d96a in minor_collection (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, need=6, objv=0x7f4724c40100, nobj=1,
+    ygen_usage=144, recl=0x7f472273d0f0) at beam/erl_gc.c:1403
+#2  0x000000000060b088 in garbage_collect (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, need=6, objv=0x7f4724c40100, nobj=1,
+    fcalls=3971, max_young_gen_usage=0) at beam/erl_gc.c:728
+#3  0x000000000060ba65 in erts_garbage_collect_nobump (p=0x7f4724600100, need=6,
+    objv=0x7f4724c40100, nobj=1, fcalls=3971) at beam/erl_gc.c:874
+#4  0x000000000044a7f9 in process_main (x_reg_array=0x7f4724c40100,
+    f_reg_array=0x7f4724c42180) at x86_64-unknown-linux-gnu/debug/smp/beam_hot.h:38
+#5  0x000000000056fbcb in sched_thread_func (vesdp=0x7f4723882600)
+    at beam/erl_process.c:8912
+#6  0x000000000075de7e in thr_wrapper (vtwd=0x7ffed69d5a20)
+    at pthread/ethread.c:118
+#7  0x00007f47658f8184 in start_thread (arg=0x7f472273f700) at pthread_create.c:312
+#8  0x00007f476541d03d in clone () at ../sysdeps/unix/sysv/linux/x86_64/clone.S:111
+(gdb)
+#0  0x000000000060e3c1 in do_minor (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, mature=0x7f47222be9f8 "<\001",
+    mature_size=272, new_sz=233, objv=0x7f4724c40100, nobj=1) at beam/erl_gc.c:1537
+#1  0x000000000060d96a in minor_collection (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, need=6, objv=0x7f4724c40100, nobj=1,
+    ygen_usage=144, recl=0x7f472273d0f0) at beam/erl_gc.c:1403
+#2  0x000000000060b088 in garbage_collect (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, need=6, objv=0x7f4724c40100, nobj=1,
+    fcalls=3971, max_young_gen_usage=0) at beam/erl_gc.c:728
+#3  0x000000000060ba65 in erts_garbage_collect_nobump (p=0x7f4724600100, need=6,
+(gdb) backtrace
+#0  0x000000000060e3c1 in do_minor (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, mature=0x7f47222be9f8 "<\001",
+    mature_size=272, new_sz=233, objv=0x7f4724c40100, nobj=1) at beam/erl_gc.c:1537
+#1  0x000000000060d96a in minor_collection (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, need=6, objv=0x7f4724c40100, nobj=1,
+    ygen_usage=144, recl=0x7f472273d0f0) at beam/erl_gc.c:1403
+#2  0x000000000060b088 in garbage_collect (p=0x7f4724600100,
+    live_hf_end=0xfffffffffffffff8, need=6, objv=0x7f4724c40100, nobj=1,
+    fcalls=3971, max_young_gen_usage=0) at beam/erl_gc.c:728
+#3  0x000000000060ba65 in erts_garbage_collect_nobump (p=0x7f4724600100, need=6,
+    objv=0x7f4724c40100, nobj=1, fcalls=3971) at beam/erl_gc.c:874
+#4  0x000000000044a7f9 in process_main (x_reg_array=0x7f4724c40100,
+    f_reg_array=0x7f4724c42180) at x86_64-unknown-linux-gnu/debug/smp/beam_hot.h:38
+#5  0x000000000056fbcb in sched_thread_func (vesdp=0x7f4723882600)
+    at beam/erl_process.c:8912
+#6  0x000000000075de7e in thr_wrapper (vtwd=0x7ffed69d5a20)
+    at pthread/ethread.c:118
+#7  0x00007f47658f8184 in start_thread (arg=0x7f472273f700) at pthread_create.c:312
+#8  0x00007f476541d03d in clone () at ../sysdeps/unix/sysv/linux/x86_64/clone.S:111
+(gdb) source ../
+1/
+.babel.json
+.bash_history
+.bash_login
+.bash_logout
+.bash_profile
+.bashrc
+.bundle/
+.cache/
+.chromedriver-helper/
+codec-beam/
+.config/
+deploy@rad-hoc.hubtran.com
+.docker/
+documentation/
+dotfiles/
+.elm/
+elm-helpers/
+.elm-install/
+erlang-otp/
+esl-erlang_20.2.2-1~ubuntu~xenial_amd64.deb
+freight-payment-audit/
+.gem/
+.gitconfig
+.gnupg/
+.guard_history
+Host
+hubtran-web/
+.inputrc
+.irb-history
+.irbrc
+.lein/
+.lesshst
+.local/
+maybe_bad_gs.tif
+.node-gyp/
+nomad/
+notes-verifications.txt
+.npm/
+.npmrc
+PDFJoiner20180202-12700-4e2djo.pdf
+pine/
+.pki/
+postgrest-heroku/
+.profile
+.pry_history
+.psql_history
+.rbenv/
+.rediscli_history
+.ruby_inline/
+.rvm/
+.rvmrc
+.ssh/
+.stack/
+support/
+.tldr/
+tmate-client-13664.log
+tmate-server-13666.log
+.tmux.conf
+.tmuxinator/
+verifications/
+.vim/
+.viminfo
+.vimrc
+(gdb) source ../erlang-otp/ot
+otp_build           otp_patch_apply     OTP_VERSION         otp_versions.table
+(gdb) source ../erlang-otp/erts/etc/unix/etp
+etp-commands      etp-commands.in   etp-thr.py
+etp_commands.erl  etp_commands.mk
+(gdb) source ../erlang-otp/erts/etc/unix/etp-comm
+etp-commands      etp_commands.erl  etp-commands.in   etp_commands.mk
+(gdb) source ../erlang-otp/erts/etc/unix/etp-commands.in
+Redefine command "etp-proc-state-int"? (y or n) [answered Y; input not from terminal
+]
+Redefine command "etp-proc-state"? (y or n) [answered Y; input not from terminal]
+%---------------------------------------------------------------------------
+% Use etp-help for a command overview and general help.
+%
+% To use the Erlang support module, the environment variable ROOTDIR
+% must be set to the toplevel installation directory of Erlang/OTP,
+% so the etp-commands file becomes:
+%     $ROOTDIR/erts/etc/unix/etp-commands
+% Also, erl and erlc must be in the path.
+%---------------------------------------------------------------------------
+etp-set-max-depth 20
+etp-set-max-string-length 100
+--------------- System Information ---------------
+OTP release: 20
+ERTS version: 9.3.3.3
+Compile date: Sun Aug 26 19:52:18 2018
+Arch: x86_64-unknown-linux-gnu
+Endianness: Little
+Word size: 64-bit
+HiPE support: yes
+SMP support: yes
+Thread support: yes
+Kernel poll: Supported but not used
+Debug compiled: yes
+Lock checking: yes
+Lock counting: no
+Node name: nonode@nohost
+---Type <return> to continue, or q <return> to quit---
+Number of schedulers: 4
+Number of async-threads: 10
+--------------------------------------------------
+(gdb) print ptr
+$1 = (Eterm *) 0xaeaeaeaeaeaeaeac
+(gdb) print gval
+$2 = 12587190073825341102
+(gdb) etp-process-info p
+  Pid: <0.64.0>
+  State: on-heap-msgq | garbage-collecting | running | active | prq-prio-normal | us
+r-prio-normal | act-prio-normal
+
+  Flags: on-heap-msgq
+  Registered name: pine
+  Current function: unknown
+  CP: #Cp<pine:'elm-lang/core/Main#countdownHelp'/1+0x60>
+  I: #Cp<gen_server:loop/7+0x130>
+  Heap size: 233
+  Old-heap size: 376
+  Mbuf size: 0
+  Msgq len: 0 (inner=0, outer=0)
+  Parent: <0.61.0>
+  Pointer: (Process *) 0x7f4724600100
+(gdb) etp-stacktrace p
+% Stacktrace (86)
+#Cp<gen_server:loop/7+0x130>  (I)
+#Cp<pine:'elm-lang/core/Main#countdownHelp'/1+0x60>  (cp)
+#Cp<pine:'elm-lang/core/Main#countdown'/1+0x108>.
+#Cp<pine:'elm-lang/core/Main#countdownHelp'/1+0x60>.
+#Cp<pine:'elm-lang/core/Main#countdown'/1+0x108>.
+#Cp<pine:'elm-lang/core/Main#countdownHelp'/1+0x60>.
+#Cp<pine:'elm-lang/core/Main#countdown'/1+0x108>.
+#Cp<pine:'elm-lang/core/Main#countdownHelp'/1+0x60>.
+#Cp<pine:'elm-lang/core/Main#countdown'/1+0x108>.
+#Cp<pine:'elm-lang/core/Main#countdownHelp'/1+0x60>.
+#Cp<pine:'elm-lang/core/Main#countdown'/1+0x108>.
+#Cp<pine:'elm-lang/core/Main#countdownHelp'/1+0x60>.
+#Cp<pine:'elm-lang/core/Main#countdown'/1+0x108>.
+#Cp<pine:'elm-lang/core/Main#handleCall'/2+0x190>.
+#Cp<pine:handle_call/3+0xa8>.
+#Cp<pine:'elm-lang/core/Main#main'/0+0x48>.
+#Cp<pine:handle_call/3+0x58>.
+#Cp<gen_server:try_handle_call/4+0xa8>.
+#Cp<gen_server:handle_msg/6+0xf8>.
+#Cp<proc_lib:init_p_do_apply/3+0x58>.
+#Cp<terminate process normally>.
+(gdb) etp-stackdump p
+% Stacktrace (86)
+#Cp<gen_server:loop/7+0x130>  (I)
+#Cp<pine:'elm-lang/core/Main#countdownHelp'/1+0x60>  (cp)
+#Cp<pine:'elm-lang/core/Main#countdown'/1+0x108>.
+4.
+Cannot access memory at address 0xaeaeaeaeaeaeaeac
+(gdb) etpf-stackdump p
+% Stacktrace (86)
+#Cp<gen_server:loop/7+0x130>  (I)
+#Cp<pine:'elm-lang/core/Main#countdownHelp'/1+0x60>  (cp)
+#Cp<pine:'elm-lang/core/Main#countdown'/1+0x108>.
+4.
+<etpf-boxed 0xaeaeaeae>.
+#Cp<pine:'elm-lang/core/Main#countdownHelp'/1+0x60>.
+5.
+4.
+<etpf-boxed 0xaeaeaeae>.
+<etpf-boxed 0xaeaeaeae>.
+false.
+#Cp<pine:'elm-lang/core/Main#countdown'/1+0x108>.
+5.
+<etpf-boxed 0xaeaeaeae>.
+#Cp<pine:'elm-lang/core/Main#countdownHelp'/1+0x60>.
+6.
+5.
+<etpf-boxed 0xaeaeaeae>.
+<etpf-boxed 0xaeaeaeae>.
+false.
+#Cp<pine:'elm-lang/core/Main#countdown'/1+0x108>.
+6.
+<etpf-boxed 0xaeaeaeae>.
+#Cp<pine:'elm-lang/core/Main#countdownHelp'/1+0x60>.
+7.
+6.
+<etpf-boxed 0xaeaeaeae>.
+<etpf-boxed 0xaeaeaeae>.
+---Type <return> to continue, or q <return> to quit---
+false.
+#Cp<pine:'elm-lang/core/Main#countdown'/1+0x108>.
+7.
+<etpf-boxed 0xaeaeaeae>.
+#Cp<pine:'elm-lang/core/Main#countdownHelp'/1+0x60>.
+8.
+7.
+<etpf-boxed 0xaeaeaeae>.
+<etpf-boxed 0xaeaeaeae>.
+false.
+#Cp<pine:'elm-lang/core/Main#countdown'/1+0x108>.
+8.
+<etpf-boxed 0xaeaeaeae>.
+#Cp<pine:'elm-lang/core/Main#countdownHelp'/1+0x60>.
+9.
+8.
+<etpf-boxed 0xaeaeaeae>.
+<etpf-boxed 0xaeaeaeae>.
+false.
+#Cp<pine:'elm-lang/core/Main#countdown'/1+0x108>.
+9.
+<etpf-boxed 0xaeaeaeae>.
+#Cp<pine:'elm-lang/core/Main#handleCall'/2+0x190>.
+10.
+9.
+-2.
+1.
+false.
+#Cp<pine:handle_call/3+0xa8>.
+---Type <return> to continue, or q <return> to quit---
+1.
+<etpf-boxed 0x222becda>.
+<etpf-boxed 0x222becda>.
+-1.
+-1.
+#Cp<pine:'elm-lang/core/Main#main'/0+0x48>.
+<etpf-boxed 0x222bedb2>.
+#Cp<pine:handle_call/3+0x58>.
+false.
+<etpf-boxed 0x222bedb2>.
+true.
+<etpf-boxed 0x222bee02>.
+<etpf-boxed 0x222bee52>.
+#Cp<gen_server:try_handle_call/4+0xa8>.
+<etpf-boxed 0x222becda>.
+#Cp<gen_server:handle_msg/6+0xf8>.
+[].
+#Catch<165>.
+#Cp<proc_lib:init_p_do_apply/3+0x58>.
+[].
+[].
+infinity.
+pine.
+<etpf-boxed 0x222becda>.
+pine.
+<0.64.0>.
+<etpf-boxed 0x222bed82>.
+<etpf-boxed 0x222bed6a>.
+#Cp<terminate process normally>.
+---Type <return> to continue, or q <return> to quit---
+[].
+#Catch<130>.
+(gdb)
