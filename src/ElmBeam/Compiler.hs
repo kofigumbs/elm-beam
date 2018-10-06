@@ -1,4 +1,4 @@
-module Pine.Compiler
+module ElmBeam.Compiler
     ( version
     , parseDependencies, Tag(..)
     , compile, Context(..), Result(..)

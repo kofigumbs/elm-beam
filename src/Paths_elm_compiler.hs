@@ -1,3 +1,3 @@
-module Paths_elm_compiler (module Paths_pine) where
+module Paths_elm_compiler (module Paths_elm_beam) where
 
-import Paths_pine
+import Paths_elm_beam

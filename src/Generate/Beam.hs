@@ -29,7 +29,7 @@ generate (Module.Module moduleName _ info) =
   let
     defs = Module.program info
   in
-  Beam.encode "pine" Env.metadata $ Env.run moduleName $
+  Beam.encode "elm" Env.metadata $ Env.run moduleName $
     do  mapM_ (BeamVar.declare moduleName) defs
         concatBags id <$> mapM (fromDef moduleName BeamVar.initial) defs
 

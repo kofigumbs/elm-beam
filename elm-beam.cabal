@@ -1,4 +1,4 @@
-Name: pine
+Name: elm-beam
 Category: Language
 Version: 0.1.1
 Maintainer: h.kofigumbs@gmail.com
@@ -14,13 +14,13 @@ License-File: LICENSE
 Cabal-Version: >=1.9
 Build-Type: Simple
 
-Bug-Reports: https://github.com/hkgumbs/pine-lang/issues
-Homepage: https://github.com/hkgumbs/pine-lang#readme
+Bug-Reports: https://github.com/hkgumbs/elm-beam/issues
+Homepage: https://github.com/hkgumbs/elm-beam#readme
 Source-Repository head
     type:     git
-    location: git://github.com/hkgumbs/pine-lang.git
+    location: git://github.com/hkgumbs/elm-beam.git
 
-Executable pine
+Executable elm-beam
     main-is: Main.hs
     other-modules:
       AST.Declaration
@@ -80,8 +80,8 @@ Executable pine
       Parse.Parse
       Parse.Pattern
       Parse.Type
-      Pine.Compiler
-      Pine.Core
+      ElmBeam.Compiler
+      ElmBeam.Core
       Reporting.Annotation
       Reporting.Bag
       Reporting.Error

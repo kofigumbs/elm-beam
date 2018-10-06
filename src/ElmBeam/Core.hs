@@ -1,4 +1,4 @@
-module Pine.Core (interfaces, modules) where
+module ElmBeam.Core (interfaces, modules) where
 
 import qualified Data.Map as Map
 
@@ -7,7 +7,7 @@ import qualified AST.Module.Name as ModuleName
 import qualified AST.Type as Type
 import qualified AST.Variable as Variable
 import qualified Elm.Package as Package
-import qualified Pine.Compiler as Compiler
+import qualified ElmBeam.Compiler as Compiler
 
 
 modules :: [ModuleName.Canonical]

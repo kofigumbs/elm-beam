@@ -2,8 +2,8 @@ import qualified Data.ByteString.Lazy as LazyBytes
 import qualified System.Environment as Env
 
 import qualified Elm.Package as Package
-import qualified Pine.Compiler as Compiler
-import qualified Pine.Core as Core
+import qualified ElmBeam.Compiler as Compiler
+import qualified ElmBeam.Core as Core
 
 
 main :: IO ()
@@ -18,7 +18,7 @@ main =
 
      case result of
        Right (Compiler.Result _ _ output) ->
-         LazyBytes.writeFile "pine.beam" output
+         LazyBytes.writeFile "elm.beam" output
        Left errors ->
          error $ concatMap (Compiler.errorToString dealiaser path source) errors
 
@@ -28,4 +28,4 @@ getFile =
   do  args <- Env.getArgs
       case args of
         [file] -> return file
-        _      -> error "USAGE: pine FILE"
+        _      -> error "USAGE: elm-beam FILE"
