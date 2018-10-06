@@ -1,3 +1,5 @@
+[![asciicast](https://asciinema.org/a/9XYQWQNlAvqMzTL54JLZSySXA.png)](https://asciinema.org/a/9XYQWQNlAvqMzTL54JLZSySXA)
+
 `elm-beam` compiles Elm to assembly that runs on the Erlang Virtual Machine.
 I wrote an essay touching on the interesting parts of this project,
 which you can [find on my blog](https://kofi.sexy/blog/elm-beam).
