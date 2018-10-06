@@ -11,7 +11,7 @@ Here are some clarifications I offer in that post:
  - `elm-beam` _is NOT_ the nicest way to run "Elm on the server"
 
 
-### Build
+## Setup guide
 
 Use [stack](https://docs.haskellstack.org/en/stable/README/)
 to build the `elm-beam` executable.
