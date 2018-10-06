@@ -1,26 +1,33 @@
-### Runing compiled `Test.elm`
+`elm-beam` compiles Elm to assembly that runs on the Erlang Virtual Machine.
+I wrote an essay touching on the interesting parts of this project,
+which you can [find on my blog](https://kofi.sexy/blog/elm-beam).
+Here are some clarifications I offer in that post:
 
+ - `elm-beam` _is_ a personal exploration
+ - `elm-beam` _is_ incomplete (in every sense)
+ - `elm-beam` _is NOT_ endoresed by the Elm core team
+ - `elm-beam` _is NOT_ the nicest way to run "Elm on the server"
+
+
+### Build
+
+Use [stack](https://docs.haskellstack.org/en/stable/README/)
+to build the `elm-beam` executable.
+
+```sh
+# make sure you have the `elm-compiler` submodule
+git submodule init
+git submodule update
+
+# build the executable
+stack build
+
+# compile the test .elm file to produce elm.beam
+stack exec elm-beam debug/Main.elm
+
+# load the BEAM module into the Erlang console and start the gen_server
+erl
+1> l(elm).
+2> gen_server:start({local, elm}, elm, [], []).
+3> gen_server:call(elm, {}).
 ```
-l(pine).
-gen_server:start({local, pine}, pine, [], []).
-gen_server:call(pine, {}).
-```
-
-### Debugging generated code
-
-```
-io:format("~p", [beam_disasm:file(pine)]), x.
-```
-
-
-
-### TODOs (very high level)
-
- - lambda lifting
- - don't allocate so much stack space
- - mutual recursion (call_last)
-
- - Term.Encode/Decode module
- - Native <> NIF
- - Server.Cmd
- - Server.Sub?
