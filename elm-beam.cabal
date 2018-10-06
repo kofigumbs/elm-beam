@@ -108,8 +108,8 @@ Executable elm-beam
       Type.Type
       Type.Unify
       Validate
+      Paths_elm_beam
       Paths_elm_compiler
-      Paths_pine
     hs-source-dirs: src, elm-compiler/src
     build-depends: aeson,
                    aeson-pretty,
