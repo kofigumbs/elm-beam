@@ -8,7 +8,7 @@ Here are some clarifications I offer in that post:
  - `elm-beam` _is_ a personal exploration
  - `elm-beam` _is_ incomplete (in every sense)
  - `elm-beam` _is NOT_ endoresed by the Elm core team
- - `elm-beam` _is NOT_ the nicest way to run "Elm on the server"
+ - `elm-beam` _is NOT_ "Elm on the server"
 
 
 ## Setup guide
