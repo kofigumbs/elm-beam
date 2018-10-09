@@ -33,3 +33,8 @@ erl
 2> gen_server:start({local, elm}, elm, [], []).
 3> gen_server:call(elm, {}).
 ```
+
+
+## Contributing
+
+To those interested in continuing the exploration: join us in the _#elm-beam_ channel on the [Elm Slack](https://elmlang.herokuapp.com/).
